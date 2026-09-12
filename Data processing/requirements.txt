@@ -1,0 +1,9 @@
+numpy
+pandas
+pyyaml
+scikit-learn
+scipy
+plotly
+matplotlib
+openpyxl  # lee los .xlsx crudos en datos/ (Exp_ANID.py, Exp_CNED.py, Exp_SCIMAGO.py, Exp_SIES.py)
+archetypes==0.6.2  # solo dashboard principal; Utils/archetypes_compat.py esta escrito para esta version

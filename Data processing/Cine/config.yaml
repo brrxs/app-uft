@@ -1,0 +1,404 @@
+# Cine/config.yaml — Config de la rama que agrupa por área CINE-F 13
+# Hand-authored / hand-edited. Copia de Vector/config.yaml (dimensiones, ejes,
+# direction, pca, plot) más los bloques de arquetipos de Archetypes/config.yaml
+# (k_candidates, k_override, aa) y el bloque dashboard: de esta rama. Mantener
+# dimensions/direction/axes en sinc con Vector/config.yaml a mano.
+#
+# Única diferencia de fondo con la rama APDA: la unidad de análisis. Aquí cada
+# celda es IES × área CINE-F 13 (9 áreas) en vez de IES × APDA (4 grupos). La
+# construye Cine/00_prepare_data.py pasándole group_col='cine-f 13 área' a
+# Utils/data_prep.py::load_universe, que reemplaza el contenido de la columna
+# 'apda' por el área. Todo lo de aguas abajo agrupa por 'apda' sin nombrar
+# APDAs concretas, así que corre igual sin cambios.
+#
+# Ojo con "APDA" en los comentarios de más abajo, heredados de
+# Vector/config.yaml: describen el diseño de cada dimensión y siguen valiendo,
+# pero en esta rama el grupo par es el área CINE-F 13. El sufijo "apda" de
+# axes_by_apda y de zscore_within_apda es el nombre del parámetro en el código,
+# no la taxonomía: aquí las claves son nombres de área.
+#
+# Orden de ejecución (desde la raíz del proyecto):
+#   python Cine/00_prepare_data.py
+#   python Archetypes/01_dimension_scores.py Cine/config.yaml Cine/outputs
+#   python Archetypes/02_archetypes.py       Cine/config.yaml Cine/outputs
+#   python Dashboard/build_dashboard.py      Cine/config.yaml
+#
+data_source: table built by Vector/00_prepare_data.py from
+#   dfs/master_dataset.csv (one row per IES×APDA cell).
+#
+# normalization options:
+#   zscore_within_apda  — z-score each variable within its APDA peer group,
+#                         then rescale globally to 0-100%
+#   minmax              — global min-max scaling to 0-100%
+#
+# target / acred_min_filter: regression target column and the minimum years
+#   of accreditation used to filter institutions before plotting.
+#
+# dimensions: each entry maps a dimension name to a list of variables with weights.
+#   All weights default to 1.0 (equal contribution). Adjust manually if needed.
+#
+# direction: optional {variable: -1} overrides for variables whose raw semantics
+#   run opposite to "bigger = better" (e.g. cost, a program's start year). Anything
+#   not listed defaults to +1 (unflipped). Applied before normalization in
+#   Utils/data_prep.py::compute_dimension_scores() so every dimension score stays
+#   oriented "bigger = better" regardless of the input variable's natural sign.
+#
+# axes.x / axes.y: each axis is a weighted sum of dimension scores (0-100 scale).
+#   Keys must match dimension names above. Values are percentage weights —
+#   they are normalised automatically, so {A: 1, B: 3} and {A: 25, B: 75}
+#   produce the same result.
+#
+# axes_by_apda: optional per-APDA override of axes.x/axes.y. Keyed by APDA name;
+#   any axis (x or y) omitted for a listed APDA, or any APDA not listed at all,
+#   falls back to the global axes.x/axes.y above. Same {dimension: pct} shape
+#   and auto-normalisation as axes.x/axes.y.
+#
+# axis_labels: short human-facing name shown on the x/y axis of every Vector plot
+#   (manual scatter + Dashboard). Edit freely — purely cosmetic, no effect on scoring.
+#
+# pca / plot: parameters for the PCA biplot and the manual-axis scatter plots.
+#
+data_source: Cine/data/ies_cine_features.csv
+normalization: zscore_within_apda
+# use_weights: if true, score w_mat/w_jce_*/w_academicos_39 as ordinary dimension
+#   variables (see dimensions."Cuerpo académico" / dimensions."Cuerpo académico
+#   doctor" below); if false, they're excluded from scoring and only pass through
+#   as raw columns in dimension_scores.csv.
+use_weights: true
+target: Años acreditación (30 de octubre de 2025)
+acred_min_filter: 5
+id_cols:
+- ies_norm
+- apda
+dimensions:
+  Tasa ocupación:
+    # renombrada 2026-08-24 desde "Acceso Primer año" (reasignación de pesos
+    # eje Docencia)
+    variables:
+      # total matrícula primer año: 1.0
+      prop_matricula_vacantes_año1: 1.0
+  Cuerpo académico doctor:
+    variables:
+      # retirada 2026-08-12 — _allocator fabrica varianza intra-IES que
+      # ninguna fuente respalda (ver "Inspection JCE/"); reemplazadas por
+      # el constante institucional pct_jce_*
+      # w_jce_doctor: 1.0
+      # w_jce_magister: 1.0
+      # w_jce_especialidad: 1.0
+      pct_jce_doctor: 1.0
+      # pct_jce_magister: 1.0
+      # pct_jce_especialidad: 1.0
+      # retirada 2026-08-18 — mismo motivo que w_jce_doctor arriba;
+      # reemplazada por el constante institucional pct_academicos_39, que
+      # se movió 2026-08-20 a "Cuerpo académico" (eje Docencia; renombrada
+      # "JCE" el 2026-08-24)
+      # w_academicos_39: 1.0
+  Acreditación doctorado:
+    # renombrada 2026-08-26 desde "Acreditación"; acred_posgrado_ajustado
+    # se movió a la nueva "Acreditación" (eje Docencia, ex "Acreditación
+    # Trayectoria") — esta dimensión queda sólo con la señal de doctorado.
+    variables:
+      # retirada 2026-08-17 — razón k/n premiaba denominadores chicos (3/3
+      # superaba a 5/15); reemplazada por acred_posgrado_ajustado (shrinkage
+      # bayesiano hacia la tasa del APDA, ver Utils/variable_glossary.yaml)
+      # acred_posgrado: 1.0
+      acred_doctorado_ajustado: 1.0
+      # acred_especialidad_medica movida 2026-08-18 a "Trayectoria programa",
+      # y luego 2026-08-20 a "Acreditación Trayectoria" (eje Docencia): mide
+      # calidad de la oferta docente de especialidades médicas/odontológicas,
+      # no capacidad investigativa, y sólo existe en el APDA de Salud y bienestar.
+  Matrícula:
+    variables:
+      # pct_matricula_hombres: 1.0
+      # pct_matricula_mujeres: 1.0
+      # total matrícula hombres primer año: 1.0
+      # total matrícula mujeres primer año_std: 1.0
+      paridad_matricula: 1.0
+      paridad_matricula_primer_año: 1.0
+      # retirada 2026-08-18 — institution-constant (broadcast desde
+      # Build_master_dataset.py, mismo valor repetido en todas las APDAs de
+      # la IES); reemplazada por prop_matricula_posgrado_apda, una razón
+      # real por celda IES×APDA (ver Utils/data_prep.py::add_prop_matricula_posgrado_apda)
+      # prop_matricula_posgrado_ies: 1.0
+      prop_matricula_posgrado_apda: 1.0
+      # prop_matricula_doctorado_apda movida 2026-08-20 a "Matrícula Doctorado"
+      # (eje Investigación): mide intensidad doctoral, no composición docente.
+  Matrícula Doctorado:
+    variables:
+      prop_matricula_doctorado_apda: 1.0
+  Matrícula Especialidades:
+    # sólo aplica al APDA de Salud y bienestar (mask en
+    # Utils/data_prep.py::add_prop_matricula_posgrado_apda) — confirmada
+    # 2026-09-07 en el eje Docencia (y), vía axes_by_apda abajo; no entra
+    # en axes.x/axes.y globales, para no afectar el puntaje de las otras
+    # tres APDA.
+    variables:
+      prop_matricula_especialidad_apda: 1.0
+  Investigación ANID (APDA):
+    # swap 2026-08-03 — se puntúa la vista "activos" (proyectos vigentes durante
+    # 2025, incl. plurianuales adjudicados antes) en vez de "adjudicados"
+    # (AGNO_FALLO==2025). Las variables _adjudicados quedan documentadas y
+    # comentadas; no se puntúan ambas familias porque son casi colineales.
+    variables:
+      # anid_apda_monto_mean_adjudicados: 1.0
+      anid_apda_monto_mean_activos: 1.0
+      # anid_apda_n_proyectos_fondecyt_adjudicados: 1.0
+      anid_apda_n_proyectos_fondecyt_activos: 1.0
+      # anid_apda_monto_mean_fondecyt_adjudicados: 1.0
+      anid_apda_monto_mean_fondecyt_activos: 1.0
+      # anid_apda_n_proyectos_no_fondecyt_adjudicados: 1.0
+      anid_apda_n_proyectos_no_fondecyt_activos: 1.0
+      # anid_apda_monto_mean_no_fondecyt_adjudicados: 1.0
+      anid_apda_monto_mean_no_fondecyt_activos: 1.0
+      # anid_apda_n_proyectos_otros_fondecyt_adjudicados: 1.0
+      anid_apda_n_proyectos_otros_fondecyt_activos: 1.0
+      # anid_apda_monto_mean_otros_fondecyt_adjudicados: 1.0
+      anid_apda_monto_mean_otros_fondecyt_activos: 1.0
+  # Investigación ANID (IES):
+  #   variables:
+  #     anid_ies_duracion_mean_adjudicados: 1.0
+  #     anid_ies_duracion_mean_activos: 1.0
+  #     anid_ies_monto_mean_adjudicados: 1.0
+  #     anid_ies_monto_mean_activos: 1.0
+  #     anid_ies_n_proyectos_fondecyt_adjudicados: 1.0
+  #     anid_ies_n_proyectos_fondecyt_activos: 1.0
+  #     anid_ies_monto_mean_fondecyt_adjudicados: 1.0
+  #     anid_ies_monto_mean_fondecyt_activos: 1.0
+  #     anid_ies_n_proyectos_no_fondecyt_adjudicados: 1.0
+  #     anid_ies_n_proyectos_no_fondecyt_activos: 1.0
+  #     anid_ies_monto_mean_no_fondecyt_adjudicados: 1.0
+  #     anid_ies_monto_mean_no_fondecyt_activos: 1.0
+  #     anid_ies_n_proyectos_otros_fondecyt_adjudicados: 1.0
+  #     anid_ies_n_proyectos_otros_fondecyt_activos: 1.0
+  #     anid_ies_monto_mean_otros_fondecyt_adjudicados: 1.0
+  #     anid_ies_monto_mean_otros_fondecyt_activos: 1.0
+  Producción Científica (APDA):
+    variables:
+      scimago_apda_score_w: 1.0
+      scival_apda_papers: 1.0
+  JCE:
+    # renombrada 2026-08-24 desde "Cuerpo académico" (reasignación de pesos
+    # eje Docencia)
+    variables:
+      # promedio_de_edad_ponderado_por_jce_promedio_de_edad_mujer: 1.0
+      # n_de_jce_de_la_institucion_que_trabajan_en_1_o_mas_instituciones_en_3_o_mas_instituciones: 1.0
+      # retirada 2026-08-13 — raw headcount escala con tamaño institucional,
+      # no con exclusividad; reemplazada por el ratio pct_jce_1inst
+      # n_de_jce_de_la_institucion_que_trabajan_en_1_o_mas_instituciones_en_1_institucion: 1.0
+      # pct_jce_1inst: 1.0
+      # jce_por_estudiantes: 1.0
+      # promedio_de_edad_ponderado_por_jce_promedio_de_edad_hombre: 1.0
+      # n_de_jce_por_institucion_total_hombres: 1.0
+      # n_de_jce_por_institucion_total_mujeres: 1.0
+      # paridad_jce: 1.0
+      # comentada 2026-07-29 — pendiente decisión definitiva del esquema JCE (ver Inspection JCE/)
+      # w_mat: 1.0
+      # pct_academicos_39 movida aquí 2026-08-20 desde "Cuerpo académico doctor"
+      # (antes "Capital Académico e Investigativo")
+      pct_academicos_39: 1.0
+  Selectividad:
+    variables:
+      # minimo_puntaje: 1.0
+      # retirada 2026-08-18 — media simple sobre filas I/S/C/J/V crudas, sin
+      # deduplicar por programa (composición jornada/sede sesgaba la celda) y
+      # con match exacto a CNED (22.3% cobertura); reemplazada por
+      # promedio_puntaje_apda (match ampliado a I/S/C + dedup por programa,
+      # sin ponderar, ver Utils/data_prep.py::add_puntaje_seleccion)
+      # promedio_puntaje: 1.0
+      # puntaje_corte: 1.0
+      promedio_puntaje_apda: 1.0
+      puntaje_corte_apda: 1.0
+  Acreditación:
+    # renombrada 2026-08-26 desde "Acreditación Trayectoria"; ganó
+    # acred_posgrado_ajustado, movida desde la dimensión "Acreditación
+    # doctorado" (ex "Acreditación") — cobertura de magíster se agrupa con
+    # la señal de trayectoria en vez de con doctorado.
+    variables:
+      # acred_especialidad_medica: movida aquí 2026-08-18 desde "Acreditación"
+      # (eje Investigación), y 2026-08-20 separada de "Trayectoria programa"
+      # (que se dividió en esta dimensión, solo esp./mg., y "Trayectoria
+      # Estudiantes") — sólo aplica al APDA de Salud y bienestar (mask en
+      # Utils/data_prep.py::add_acred_scores); en el resto de APDAs queda NaN
+      # y no afecta el promedio NaN-aware de esta dimensión.
+      acred_especialidad_medica: 1.0
+      acred_posgrado_ajustado: 1.0
+  Trayectoria:
+    # renombrada 2026-08-24 desde "Trayectoria Estudiantes"; empleabilidad_pond_*
+    # se sacaron de aquí a la nueva dimensión "Empleabilidad", y arancel_anual_index
+    # entró desde la dimensión "Costo" (eliminada) — reasignación de pesos eje Docencia.
+    # 2026-08-26: continuidad_estudios se movió a "Empleabilidad" y
+    # arancel_anual_index volvió a su propia dimensión "Costo" (5 pts del
+    # peso de esta dimensión en el eje y pasaron a "Costo").
+    variables:
+      # año inicio: 1.0
+      ret_1er_año: 1.0
+      # brecha_duracion: 1.0
+      # duracion_titulados_mean: 1.0
+      # duracion_titulados_median: 1.0
+      sobreduracion_meses: 1.0
+      # sobreduracion_semestres: 1.0
+  Empleabilidad:
+    # nueva dimensión 2026-08-24, separada de "Trayectoria Estudiantes"
+    # (reasignación de pesos eje Docencia). 2026-08-26: ganó continuidad_estudios,
+    # movida desde "Trayectoria".
+    variables:
+      # empleabilidad_1er_año: 1.0
+      # empleabilidad_2do_año: 1.0
+      empleabilidad_pond_1er_año: 1.0
+      empleabilidad_pond_2do_año: 1.0
+      continuidad_estudios: 1.0
+  Costo:
+    # nueva dimensión 2026-08-26, separada de "Trayectoria" (donde
+    # arancel_anual_index vivía desde que se eliminó la dimensión "Costo"
+    # original el 2026-08-24) — 5 pts del peso eje Docencia de "Trayectoria"
+    # pasaron a esta dimensión.
+    variables:
+      arancel_anual_index: 1.0
+      # pct_tes_particular_pagado_apda: 1.0
+direction:
+  arancel_anual_index: -1
+  # pct_tes_particular_pagado_apda: -1
+  # año inicio: -1
+  # brecha_duracion: -1
+  # duracion_titulados_mean: -1
+  # duracion_titulados_median: -1
+  sobreduracion_meses: -1
+  # sobreduracion_semestres: -1
+axes:
+  x:  # Docencia — data-driven weights (blended ElasticNet+RandomForest importance
+      # against target, see Vector/02_axis_weights.py); Vector/outputs/axis_weights_suggested.csv
+    Cuerpo académico doctor: 10
+    Investigación ANID (APDA): 40
+    # Investigación ANID (IES): 32.0
+    Producción Científica (APDA): 30
+    Acreditación doctorado: 10
+    Matrícula Doctorado: 10
+  y:  # Gestión — manual allocation set 2026-08-24, superseding the prior
+      # data-driven weights (blended ElasticNet+RandomForest importance
+      # against target, see Vector/02_axis_weights.py); Vector/outputs/axis_weights_suggested.csv
+      # has the last data-driven run for reference. 2026-08-26: 5 pts moved
+      # from Trayectoria to the reinstated Costo dimension.
+    Matrícula: 15
+    Trayectoria: 20
+    Costo: 2.5
+    Empleabilidad: 15
+    JCE: 15
+    Selectividad: 10
+    Tasa ocupación: 10
+    Acreditación: 10
+axes_by_apda:
+  Salud y Bienestar:
+    # Matrícula Especialidades confirmada 2026-09-07 en eje Docencia (y).
+    y:
+      Matrícula: 15
+      Trayectoria: 20
+      Costo: 2.5
+      Empleabilidad: 15
+      JCE: 15
+      Selectividad: 10
+      Tasa ocupación: 10
+      Acreditación: 10
+      Matrícula Especialidades: 10
+axis_labels:
+  x: Investigación
+  y: Docencia
+pca:
+  annotate_points: true
+  n_components: 2
+  impute_strategy: median
+  random_state: 0
+  arrow_scale_factor: 0.65
+plot:
+  figsize:
+  - 10
+  - 8
+  axis_limits:
+  - -4
+  - 104
+watermark: true
+
+# ── Arquetipos (copiado de Archetypes/config.yaml) ───────────────────────────
+# k_candidates: k probados por área; el codo RSS elige uno salvo que
+#   k_override lo fije. Se fija k=4 en las 9 áreas para que los perfiles sean
+#   comparables entre áreas, igual que el dashboard APDA, que muestra k=4 en
+#   las 4 APDAs. Cada área tiene entre 29 y 35 instituciones tras el filtro de
+#   acreditación, o sea un N por área parecido al de una APDA.
+k_candidates:
+- 2
+- 3
+- 4
+- 5
+k_override:
+  'Artes y Humanidades': 4
+  'Ciencias naturales, matemáticas y estadística': 4
+  'Ingeniería, Industria y Construcción': 4
+  'Tecnología de la Información y la Comunicación (TIC)': 4
+  'Administración de Empresas y Derecho': 4
+  'Ciencias Sociales, Periodismo e Información': 4
+  'Educación': 4
+  'Servicios': 4
+  'Salud y Bienestar': 4
+aa:
+  n_init: 10
+  max_iter: 300
+  tol: 0.0001
+  random_state: 0
+
+# ── Dashboard ────────────────────────────────────────────────────────────────
+# Pisa el BRANCH_DEFAULT de Dashboard/build_dashboard.py. parent_groups activa
+# la barra de pestañas de dos niveles: primero la APDA, después las áreas
+# CINE-F 13 que la componen — es la lógica de agrupamiento, hecha navegable.
+dashboard:
+  aa_config: Cine/config.yaml
+  features: Cine/data/ies_cine_features.csv
+  vector_dim_scores: Cine/outputs/dimension_scores.csv
+  arch_dim_scores: Cine/outputs/dimension_scores.csv
+  arch_memberships: Cine/outputs/archetype_memberships.csv
+  arch_profile_tmpl: Cine/outputs/archetype_profiles_{safe}.csv
+  texto: Cine/build_dashboard_texto.md
+  out_dir: Cine/outputs
+  generate_bi_pages: false
+  # vacío: 02_archetypes.py ya guarda k=4 en las 9 áreas (k_override arriba),
+  # así que el dashboard no necesita refittear AA en memoria.
+  k_override: {}
+  title: Dashboard CINE-F 13 — Avances {date} Proyecto APDAs
+  heading: Dashboard CINE-F 13 — Avances {date}
+  parent_label: APDA
+  group_label: área CINE-F 13
+  group_plural: áreas CINE-F 13
+  group_within: dentro del área
+  group_this: esta área
+  group_each: cada área
+  intro_note: >-
+    Esta rama repite el pipeline completo agrupando por área CINE-F 13 en vez
+    de por APDA. Un aviso importante sobre el eje Investigación: las variables
+    de ANID, Scimago y SciVal sólo existen con grano IES × APDA en las fuentes,
+    así que todas las áreas de una misma APDA comparten exactamente el mismo
+    valor en ellas. Son 70 de los 100 puntos de peso del eje, de modo que
+    dentro de una APDA ese eje separa poco entre sus áreas. Las dos APDAs de
+    una sola área (Artes y Humanidades, Salud y Bienestar) no tienen este
+    problema. Todo el resto del cálculo (normalización, dimensiones, ejes, PCA
+    y arquetipos) sí se rehace dentro de cada área.
+  parent_groups:
+    'Artes, humanidades y cultura':
+    - 'Artes y Humanidades'
+    'Ciencias, tecnología y calidad de vida':
+    - 'Ciencias naturales, matemáticas y estadística'
+    - 'Ingeniería, Industria y Construcción'
+    - 'Tecnología de la Información y la Comunicación (TIC)'
+    'Ed., Sociedad y desarrollo humano':
+    - 'Administración de Empresas y Derecho'
+    - 'Ciencias Sociales, Periodismo e Información'
+    - 'Educación'
+    - 'Servicios'
+    'Salud y bienestar':
+    - 'Salud y Bienestar'
+
+# ── Sensitivity ──────────────────────────────────────────────────────────────
+# Pisa el output por defecto de Sensitivity/06_dimension_pct_dashboard.py para
+# que la corrida de esta rama no pise Sensitivity/outputs/ de la rama APDA.
+# parent_groups (el del bloque dashboard: de arriba) se reusa tal cual para el
+# selector de dos niveles del dashboard de sensibilidad.
+sensitivity:
+  out_dir: Cine/outputs
+  out_name: dashboard_dimension_pct.html

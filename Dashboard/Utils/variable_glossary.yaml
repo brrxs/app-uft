@@ -1,0 +1,1034 @@
+# =============================================================================
+# Utils/variable_glossary.yaml — Glosario de variables (Vector + Archetypes)
+# =============================================================================
+# Fuente única de verdad para la documentación de variables en español.
+# Consumido por:
+#   - Dashboard/export_variable_glossary.py  -> genera docs/glosario_variables.md
+#   - Dashboard/build_dashboard.py           -> tooltips (ícono ⓘ) en el dashboard
+#
+# Cada entrada usa exactamente el nombre de columna tal como aparece en
+# Vector/config.yaml y Archetypes/config.yaml (activo o comentado).
+#
+# Campos:
+#   dimension    — dimensión a la que pertenece (o pertenecía) en los config.yaml
+#   origen       — opcional: creada | recolectada. "recolectada" = tomada tal cual
+#                  (o con rename/agregación simple: suma, promedio, conteo) de UNA
+#                  sola columna cruda; "creada" = calculada combinando varios campos
+#                  en un concepto nuevo (razón, %, índice, banda). Solo poblado para
+#                  variables activas por ahora (ver Dashboard/export_variables.py).
+#   nombre       — nombre legible en español
+#   nombre_corto — opcional: nombre corto ("showcase") para mostrar en UI/reportes
+#                  (dashboard, exports) en vez del nombre de columna técnico. Más
+#                  corto y limpio que `nombre`, que sigue siendo la versión completa
+#                  usada en tooltips/glosario. Solo poblado para variables activas
+#                  (ver Utils/variable_labels.py, consumido por Dashboard/).
+#   descripcion  — qué mide la variable (1-3 oraciones)
+#   calculo      — fórmula/lógica de derivación (agregación, filtros, normalización)
+#   fuente       — archivo/fuente de datos crudos de origen
+#   unidad       — unidad o escala de la variable
+#   orientacion  — mayor_es_mejor | menor_es_mejor (espeja direction: -1)
+#   estado       — activa | retirada
+#   notas        — opcional: coberturas parciales, motivo de retiro, etc.
+# =============================================================================
+
+"total matrícula primer año":
+  dimension: "Tasa ocupación"
+  origen: "recolectada"
+  nombre: "Matrícula de primer año"
+  descripcion: "Cantidad de estudiantes nuevos matriculados en primer año en los programas de Pregrado de la APDA, dentro de una institución."
+  calculo: "Suma de 'total matrícula primer año' (SIES Matrícula) a nivel programa, restringida a nivel global == 'Pregrado', sumada (no promediada) dentro de la celda IES×APDA (Utils/data_prep.py::load_universe, máscara Pregrado; agregación en aggregate_ies_apda_rich, SUM_FEATS)."
+  fuente: "SIES — Matricula_2007_2025_WEB_15_07_2025.csv"
+  unidad: "N° de estudiantes"
+  orientacion: "mayor_es_mejor"
+  estado: "retirada"
+  notas: "Corregida 2026-08-17: hasta entonces se agregaba con media simple dentro de la celda IES×APDA (sum(programas)/n_programs), deflactando el total real en instituciones con muchos programas. Ahora es una suma NaN-aware real. Corregida 2026-08-17 (segunda vez): restringida a Pregrado — antes sumaba también Posgrado/Postítulo, por lo que una IES con sólo un Magíster/Diplomado en una APDA (ej. UFSM en \"Artes, humanidades y cultura\") mostraba acceso a primer año sin tener oferta de pregrado real ahí. Celdas sin programas de Pregrado ahora quedan en NaN. Comentada en dimensions de Vector/config.yaml y Archetypes/config.yaml el 2026-08-18."
+
+prop_matricula_vacantes_año1:
+  dimension: "Tasa ocupación"
+  origen: "creada"
+  nombre: "Ocupación de vacantes de primer año"
+  nombre_corto: "Tasa de ocupación de vacantes"
+  descripcion: "Proporción de las vacantes de Pregrado ofertadas en primer año que efectivamente se llenaron con matrícula nueva. Mide qué tan demandado es el programa. Específica de Pregrado: numerador y denominador excluyen Posgrado y Postítulo."
+  calculo: "total matrícula primer año / (vacantes semestre uno + vacantes semestre dos), restringida a nivel global == 'Pregrado' (numerador ya viene enmascarado a Pregrado). Definida en Utils/data_prep.py::load_universe."
+  fuente: "SIES — Matricula_2007_2025_WEB_15_07_2025.csv (matrícula) + Oferta_Academica_2010_al_2025_SIES_02_06_2025_WEB_E.csv (vacantes)"
+  unidad: "razón (matrícula / vacantes)"
+  orientacion: "mayor_es_mejor"
+  estado: "activa"
+  notas: "Corregida 2026-08-17: restringida a Pregrado, mismo motivo que 'total matrícula primer año' (ver notas de esa variable)."
+
+w_jce_doctor:
+  dimension: "Cuerpo académico doctor"
+  nombre: "Composición doctoral del cuerpo académico (JCE), ponderada"
+  descripcion: "Proxy de qué tan doctoral es la composición del cuerpo académico de la institución, a nivel programa. Hasta el 28-07-2026 era una masa absoluta (conteo institucional de JCE con grado de doctor, repartido por matrícula), lo que conflaba tamaño de la institución con composición por grado. Del 28-07-2026 al 12-08-2026 fue una razón (composición) multiplicada por _allocator."
+  calculo: "(n_de_jce_por_nivel_de_formacion_doctor / n_de_jce_por_institucion_total_general) × _allocator, donde _allocator excluye matrícula Postítulo del numerador y denominador y divide por n_apda_activas (cobertura de APDAs de la IES) para amortiguar la sobre-asignación a instituciones poco diversificadas; luego reescalada 0-100. Exploration and data completion/Exp_SIES.py, líneas 675-778."
+  fuente: "SIES PAC web — PAC_web_2008_2025_SIES_EE.xlsx, hoja BD_Académicos_JCE"
+  unidad: "índice 0-100"
+  orientacion: "mayor_es_mejor"
+  estado: "retirada"
+  notas: "Retirada 2026-08-12: _allocator sigue fabricando varianza intra-IES que ninguna fuente respalda — PAC solo reporta JCE por institución y nivel de formación, nunca por APDA (ver 'Inspection JCE/', Secciones 3-9). Reemplazada por pct_jce_doctor (mismo numerador de composición, sin _allocator). Se mantiene calculada en Exploration and data completion/Exp_SIES.py y dfs/merged_final.csv solo porque Inspection JCE/Exp_JCE_casos.py la usa como baseline documentado."
+
+w_jce_magister:
+  dimension: "Cuerpo académico doctor"
+  nombre: "Composición de magísteres del cuerpo académico (JCE), ponderada"
+  descripcion: "Igual que 'Composición doctoral (JCE)' pero para académicos con grado de magíster."
+  calculo: "(n_de_jce_por_nivel_de_formacion_magister / n_de_jce_por_institucion_total_general) × _allocator; reescalada 0-100. Exploration and data completion/Exp_SIES.py, líneas 675-778."
+  fuente: "SIES PAC web — PAC_web_2008_2025_SIES_EE.xlsx, hoja BD_Académicos_JCE"
+  unidad: "índice 0-100"
+  orientacion: "mayor_es_mejor"
+  estado: "retirada"
+  notas: "Retirada 2026-08-12, mismo motivo que w_jce_doctor. Reemplazada por pct_jce_magister."
+
+w_jce_especialidad:
+  dimension: "Cuerpo académico doctor"
+  nombre: "Composición de especialistas médicos/odontológicos del cuerpo académico (JCE), ponderada"
+  descripcion: "Igual que 'Composición doctoral (JCE)' pero para académicos con especialidad médica u odontológica."
+  calculo: "(n_de_jce_por_nivel_de_formacion_especialidad_medica_u_odontologica / n_de_jce_por_institucion_total_general) × _allocator; reescalada 0-100. Exploration and data completion/Exp_SIES.py, líneas 675-778."
+  fuente: "SIES PAC web — PAC_web_2008_2025_SIES_EE.xlsx, hoja BD_Académicos_JCE"
+  unidad: "índice 0-100"
+  orientacion: "mayor_es_mejor"
+  estado: "retirada"
+  notas: "Retirada 2026-08-12, mismo motivo que w_jce_doctor. Reemplazada por pct_jce_especialidad."
+
+pct_jce_doctor:
+  dimension: "Cuerpo académico doctor"
+  origen: "creada"
+  nombre: "% JCE doctor (constante institucional)"
+  nombre_corto: "% JCE con doctorado"
+  descripcion: "Qué porcentaje del JCE académico total de la institución corresponde a académicos con grado de doctor. Constante por IES: se repite en las cuatro celdas IES×APDA de una misma institución, porque PAC no reporta JCE desglosado por área del conocimiento y ningún alocador probado (ver 'Inspection JCE/', Secciones 3-9) logró repartirlo entre APDA sin fabricar varianza espuria."
+  calculo: "n_de_jce_por_nivel_de_formacion_doctor / n_de_jce_por_institucion_total_general × 100. Exploration and data completion/Exp_SIES.py (bloque 'JCE weights'). Constante dentro de IES → agregada por 'first' en Utils/data_prep.py::aggregate_ies_apda_rich."
+  fuente: "SIES PAC web — PAC_web_2008_2025_SIES_EE.xlsx, hoja BD_Académicos_JCE"
+  unidad: "% (0-100)"
+  orientacion: "mayor_es_mejor"
+  estado: "activa"
+  notas: "Reemplaza a w_jce_doctor desde el 12-08-2026 — mismo numerador de composición, sin multiplicar por _allocator. Mide composición institucional, no composición por APDA."
+
+pct_jce_magister:
+  dimension: "Cuerpo académico doctor"
+  origen: "creada"
+  nombre: "% JCE magíster (constante institucional)"
+  descripcion: "Igual que '% JCE doctor' pero para académicos con grado de magíster (académico y profesional colapsados — la taxonomía SIES/PAC no distingue entre ambos)."
+  calculo: "n_de_jce_por_nivel_de_formacion_magister / n_de_jce_por_institucion_total_general × 100. Exploration and data completion/Exp_SIES.py (bloque 'JCE weights')."
+  fuente: "SIES PAC web — PAC_web_2008_2025_SIES_EE.xlsx, hoja BD_Académicos_JCE"
+  unidad: "% (0-100)"
+  orientacion: "mayor_es_mejor"
+  estado: "retirada"
+  notas: "Reemplaza a w_jce_magister desde el 12-08-2026. Comentada de nuevo 2026-08-13 en ambos config.yaml (branches) por decisión del usuario, sin reemplazo activo — w_jce_magister también permanece comentada."
+
+pct_jce_especialidad:
+  dimension: "Cuerpo académico doctor"
+  origen: "creada"
+  nombre: "% JCE especialidad médica/odontológica (constante institucional, sólo APDA Salud)"
+  descripcion: "Igual que '% JCE doctor' pero para académicos con especialidad médica u odontológica. A diferencia de pct_jce_doctor, desde el 17-08-2026 sólo se puntúa en el APDA 'Salud y bienestar' — es NaN en los otros tres APDA de cada IES, porque el ratio de especialistas médicos/odontológicos no tiene relación con Artes, Ciencias o Educación."
+  calculo: "n_de_jce_por_nivel_de_formacion_especialidad_medica_u_odontologica / n_de_jce_por_institucion_total_general × 100, luego .where(apda == 'Salud y bienestar') en Utils/data_prep.py::load_universe. Exploration and data completion/Exp_SIES.py (bloque 'JCE weights')."
+  fuente: "SIES PAC web — PAC_web_2008_2025_SIES_EE.xlsx, hoja BD_Académicos_JCE"
+  unidad: "% (0-100)"
+  orientacion: "mayor_es_mejor"
+  estado: "retirada"
+  notas: "Reemplaza a w_jce_especialidad desde el 12-08-2026. Acotada al APDA 'Salud y bienestar' desde el 17-08-2026 (antes se repetía sin sentido en los 4 APDA de cada IES, igual que acred_especialidad_medica ya estaba acotada por nivel carrera). Agregada a FORCE_INCLUDE en Utils/data_prep.py porque la cobertura cae a ~25% tras la restricción. Comentada en dimensions de Vector/config.yaml y Archetypes/config.yaml el 2026-08-18."
+
+w_academicos_39:
+  dimension: "Cuerpo académico doctor"
+  nombre: "Dotación de académicos con 39+ horas contratadas, ponderada"
+  descripcion: "Proxy de dedicación docente/investigativa de tiempo casi-completo o completo: cantidad de académicos de la institución contratados por 39 horas semanales o más, repartida a cada programa vía _allocator. Se mantiene como variable independiente de w_jce_doctor pese a su correlación (ρ≈0.90) — JCE es una forma reducida del headcount académico (jornada equivalente vs. conteo de personas), por lo que la correlación es estructuralmente esperable y ambas aportan información distinta (decisión 28-07-2026, sin cambio de fórmula por este motivo)."
+  calculo: "N° de académicos con 39+ horas contratadas (institución) × _allocator, donde _allocator excluye matrícula Postítulo y divide por n_apda_activas; reescalada 0-100. Exploration and data completion/Exp_SIES.py, líneas 675-778; agregada en julio 2026, ver Inspection JCE/2026-07-22_pac_academicos39_jce_weighting_acreditacion.md; fórmula del allocator revisada 28-07-2026."
+  fuente: "SIES PAC web — PAC_web_2008_2025_SIES_EE.xlsx, hoja BD_Académicos_Número"
+  unidad: "índice 0-100"
+  orientacion: "mayor_es_mejor"
+  estado: "retirada"
+  notas: "Retirada 2026-08-13, reemplazada por pct_academicos_39: mismo motivo que w_jce_doctor/magister/especialidad — _allocator fabrica varianza intra-IES que ninguna fuente respalda (PAC solo reporta el headcount 39+ horas a nivel institución, nunca por APDA). Revertida a activa el 13-08-2026 en ambos config.yaml (branches) por decisión del usuario. Retirada de nuevo el 18-08-2026, definitivamente: pct_academicos_39 vuelve a quedar activa en ambos config.yaml."
+
+pct_academicos_39:
+  dimension: "JCE"
+  origen: "creada"
+  nombre: "% académicos con 39+ horas contratadas (constante institucional)"
+  nombre_corto: "N° de académicos jornada completa"
+  descripcion: "Qué porcentaje del cuerpo académico total de la institución está contratado por 39 horas semanales o más. Constante por IES: se repite en las cuatro celdas IES×APDA de una misma institución, porque PAC no reporta el headcount por rango de horas desglosado por área del conocimiento."
+  calculo: "n_de_academicos_por_rango_de_horas_contratadas_entre_39_y_mas / n_de_academicos_por_insitucion_total_general × 100. Exploration and data completion/Exp_SIES.py (bloque 'JCE weights'). Constante dentro de IES → agregada por 'first' en Utils/data_prep.py::aggregate_ies_apda_rich."
+  fuente: "SIES PAC web — PAC_web_2008_2025_SIES_EE.xlsx, hoja BD_Académicos_Número"
+  unidad: "% (0-100)"
+  orientacion: "mayor_es_mejor"
+  estado: "activa"
+  notas: "Reemplazó a w_academicos_39 el 13-08-2026 — mismo numerador (headcount 39+ horas), sin multiplicar por _allocator. Revertida (comentada de nuevo) el 13-08-2026 en ambos config.yaml (branches) por decisión del usuario. Reactivada definitivamente el 18-08-2026, mismo criterio ya aplicado a pct_jce_doctor/magister/especialidad: se prefiere la constante institucional de la base de datos (no ponderada por _allocator) sobre la versión ponderada."
+
+acred_posgrado:
+  dimension: "Acreditación"
+  origen: "creada"
+  nombre: "Acreditación del programa (posgrado)"
+  descripcion: "Indica si el programa de posgrado de la APDA está acreditado. No aplica (NaN) para programas de pregrado."
+  calculo: "acred_bin (1 si 'acreditación carrera o programa' no es nula y no contiene 'no acreditada'/'sin acreditación') restringido a nivel global == 'Posgrado'. Utils/data_prep.py, líneas 101-120."
+  fuente: "SIES Oferta Académica — Oferta_Academica_2010_al_2025_SIES_02_06_2025_WEB_E.csv"
+  unidad: "binario (0/1), promediado a fracción dentro de la celda"
+  orientacion: "mayor_es_mejor"
+  estado: "retirada"
+  notas: "Retirada 2026-08-17: la razón k/n premia denominadores chicos — una IES con 3/3 programas de posgrado acreditados superaba a una con 5/15, pese a tener mucho menos alcance acreditado. Mismo patrón que w_jce_doctor/_allocator (ver 'Inspection JCE/Exp_JCE_casos_texto.md'). Reemplazada por acred_posgrado_ajustado. La columna se eliminó de data_prep.py el 2026-08-18: acred_posgrado_ajustado ya no se deriva de ella, sino de un pipeline propio (ver esa entrada) que además redefine qué cuenta como 'posgrado' (nivel global == 'Posgrado', es decir Magíster + Doctorado, era una definición distinta de la usada en matrícula)."
+
+acred_posgrado_ajustado:
+  dimension: "Acreditación"
+  origen: "creada"
+  nombre: "Acreditación del programa (posgrado), ajustada por escala"
+  nombre_corto: "Cobertura acreditación magíster"
+  descripcion: "Variable de cobertura: qué proporción de la oferta de posgrado (Magíster + Especialidad Médica U Odontológica) de la celda IES×APDA, vigente y con estudiantes nuevos, está acreditada — ajustada por escala mediante shrinkage bayesiano para que instituciones con pocos programas no superen artificialmente a instituciones con oferta más amplia y acreditada. NaN cuando la institución no tiene oferta vigente de posgrado en esa APDA (ausencia de oferta, no un 0); 0 cuando sí tiene oferta pero ningún programa está acreditado."
+  calculo: "Fórmula: acred_posgrado_ajustado = (k + C·m) / (n + C). k = # programas de posgrado acreditados y n = # programas de posgrado en la celda IES×APDA — 'posgrado' = Magíster + Especialidad Médica U Odontológica (mismo universo que prop_matricula_posgrado_apda; Doctorado se puntúa aparte en acred_doctorado_ajustado), deduplicados por cod_carrera (colapsa el fan-out de sede/jornada/versión del grano de master_dataset, acred_bin agregado con max) y restringidos a vigencia == 'Vigente con estudiantes nuevos'. m = tasa de acreditación de posgrado del APDA de esa celda; C = promedio de n entre celdas de ese mismo APDA con n>0. m y C se calculan por APDA por separado (no agrupando las 4 APDAs). Tres estados, nunca por orden de asignación: n=0 -> NaN (sin oferta); n>0 y k=0 -> 0 forzado (oferta sin ningún acreditado, no pasa por la fórmula: un 0/n confirmado no necesita suavizado); n>0 y k>0 -> fórmula de shrinkage. Utils/data_prep.py::add_acred_scores."
+  fuente: "SIES Oferta Académica — Oferta_Academica_2010_al_2025_SIES_02_06_2025_WEB_E.csv"
+  unidad: "razón ajustada 0-1 (NaN = sin oferta, distinto de 0 = oferta sin acreditar)"
+  orientacion: "mayor_es_mejor"
+  estado: "activa"
+  notas: "Redefinida 2026-08-18: (1) el universo de 'posgrado' pasa de nivel global == 'Posgrado' (Magíster + Doctorado, excluía Especialidad Médica) a Magíster + Especialidad Médica U Odontológica, alineado con prop_matricula_posgrado_apda — Doctorado pasa a puntuarse aparte en acred_doctorado_ajustado; (2) se deduplica por cod_carrera en vez de contar filas (fan-out sede/jornada/versión); (3) se restringe a vigencia == 'Vigente con estudiantes nuevos'. Cobertura real: 147/205 celdas IES×APDA (71,7%), n medio 10,3 programas; 58 celdas sin oferta (NaN) y 57 con oferta pero 0 acreditados (valor 0). k_posgrado_acreditados/n_posgrado_programs se exportan junto a esta variable como trazabilidad — sin ponderación propia en el modelo — y permiten distinguir 'sin oferta' de 'oferta sin acreditar' directamente en los datos, sin depender de interpretar el NaN. Movida 2026-08-26 de 'Acreditación doctorado' (ex 'Acreditación', eje Investigación) a 'Acreditación' (ex 'Acreditación Trayectoria', eje Docencia): la cobertura de magíster se agrupa con la señal de trayectoria en vez de con doctorado."
+
+acred_doctorado_ajustado:
+  dimension: "Acreditación doctorado"
+  origen: "creada"
+  nombre: "Acreditación del programa (doctorado), ajustada por escala"
+  nombre_corto: "Cobertura acreditación doctorado"
+  descripcion: "Variable de cobertura: qué proporción de la oferta de Doctorado de la celda IES×APDA, vigente y con estudiantes nuevos, está acreditada — ajustada por escala mediante shrinkage bayesiano, mismo criterio que acred_posgrado_ajustado. NaN cuando la institución no tiene oferta vigente de doctorado en esa APDA (ausencia de oferta, no un 0); 0 cuando sí tiene oferta pero ningún programa está acreditado."
+  calculo: "Fórmula: acred_doctorado_ajustado = (k + C·m) / (n + C). k = # programas de doctorado acreditados y n = # programas de doctorado en la celda IES×APDA, deduplicados por cod_carrera (acred_bin agregado con max) y restringidos a vigencia == 'Vigente con estudiantes nuevos'. m = tasa de acreditación de doctorado del APDA de esa celda; C = promedio de n entre celdas de ese mismo APDA con n>0, ambos calculados por APDA por separado — mismo mecanismo que acred_posgrado_ajustado. Tres estados: n=0 -> NaN (sin oferta); n>0 y k=0 -> 0 forzado (oferta sin ningún acreditado); n>0 y k>0 -> fórmula de shrinkage. Utils/data_prep.py::add_acred_scores."
+  fuente: "SIES Oferta Académica — Oferta_Academica_2010_al_2025_SIES_02_06_2025_WEB_E.csv"
+  unidad: "razón ajustada 0-1 (NaN = sin oferta, distinto de 0 = oferta sin acreditar)"
+  orientacion: "mayor_es_mejor"
+  estado: "activa"
+  notas: "Añadida 2026-08-18 junto con el rediseño de acred_posgrado_ajustado: el doctorado no estaba representado en la dimensión Acreditación pese a tener la mayor tasa de acreditación de los tres niveles (0,78, frente a 0,40 en posgrado y 0,28 en especialidad médica). Cobertura real: 101/205 celdas IES×APDA (49,3%), n medio 3,6 programas; 104 celdas sin oferta (NaN) y 18 con oferta pero 0 acreditados (valor 0). k_doctorado_acreditados/n_doctorado_programs se exportan como trazabilidad, mismo patrón que acred_posgrado_ajustado. Dimensión renombrada 2026-08-26 de 'Acreditación' a 'Acreditación doctorado' cuando acred_posgrado_ajustado se movió fuera de ella."
+
+acred_especialidad_medica:
+  dimension: "Acreditación"
+  origen: "creada"
+  nombre: "Acreditación del programa (especialidad médica/odontológica)"
+  nombre_corto: "Cobertura acreditación de programas Esp. médica/odontológica"
+  descripcion: "Variable de cobertura, acotada al APDA de Salud y bienestar: qué proporción de los programas de especialidad médica u odontológica de la institución, vigentes y con estudiantes nuevos, está acreditada. NaN fuera de Salud y bienestar y para instituciones sin oferta vigente de especialidades en esa APDA (ausencia de oferta, no un 0); 0 cuando sí tiene oferta pero ninguna especialidad está acreditada."
+  calculo: "Fórmula: acred_especialidad_medica = k / n (razón cruda, sin shrinkage — n promedia ~24 programas por celda, fuera del régimen de denominador chico que motiva el ajuste bayesiano de acred_posgrado_ajustado/acred_doctorado_ajustado). k = # programas de especialidad médica u odontológica acreditados y n = # de esos mismos programas en la celda IES×APDA, deduplicados por cod_carrera (acred_bin agregado con max) y restringidos a vigencia == 'Vigente con estudiantes nuevos'. Máscara adicional: forzado a NaN fuera de apda == 'Salud y bienestar' (en la práctica ya 100% acotado ahí por nivel carrera, verificado sobre datos reales; la máscara documenta la intención y protege ante un futuro remapeo de APDA). Utils/data_prep.py::add_acred_scores."
+  fuente: "SIES Oferta Académica — Oferta_Academica_2010_al_2025_SIES_02_06_2025_WEB_E.csv"
+  unidad: "razón 0-1 (NaN = sin oferta o fuera de Salud y bienestar, distinto de 0 = oferta sin acreditar)"
+  orientacion: "mayor_es_mejor"
+  estado: "activa"
+  notas: "Movida 2026-08-18 de la dimensión 'Acreditación' (eje Investigación) a 'Trayectoria programa' (eje Docencia): mide calidad de la oferta docente de especialidades médicas, no capacidad investigativa. Redefinida el mismo día con el mismo criterio que acred_posgrado_ajustado: deduplicación por cod_carrera + filtro de vigencia (antes contaba filas de cualquier vigencia, sin deduplicar). Cobertura real: 21/205 celdas IES×APDA (10,2%), todas en Salud y bienestar; n medio 24,3 programas; 184 celdas sin oferta o fuera de Salud (NaN) y 3 con oferta pero 0 acreditadas (valor 0). k_especialidad_acreditadas/n_especialidad_programs se exportan como trazabilidad. Dimensión 'Acreditación Trayectoria' renombrada 2026-08-26 a 'Acreditación', ganando acred_posgrado_ajustado."
+
+paridad_matricula:
+  dimension: "Matrícula"
+  origen: "creada"
+  nombre: "Paridad de género — matrícula total"
+  nombre_corto: "Paridad de género (matrícula)"
+  descripcion: "Qué tan equilibrada está la matrícula total de la APDA entre hombres y mujeres. El score es máximo cuando la participación femenina está entre 40% y 60%, y decae hacia 0 en los extremos (0% o 100% mujeres)."
+  calculo: "Participación femenina = suma de matrícula mujeres / (suma mujeres + suma hombres) en toda la celda IES×APDA (ponderada por matrícula real de cada programa, no promedio simple de proporciones), luego banda trapezoidal 40-60%. Utils/data_prep.py::add_parity_scores/_parity_score, líneas 460-521."
+  fuente: "SIES — Matricula_2007_2025_WEB_15_07_2025.csv"
+  unidad: "score 0-100"
+  orientacion: "mayor_es_mejor"
+  estado: "activa"
+  notas: "Reemplazó a pct_matricula_hombres/pct_matricula_mujeres como par de variables independientes: en vez de premiar linealmente un solo sexo, penaliza cuando la matrícula se aleja de un rango de equilibrio 40-60%."
+
+paridad_matricula_primer_año:
+  dimension: "Matrícula"
+  origen: "creada"
+  nombre: "Paridad de género — matrícula de primer año"
+  nombre_corto: "Paridad de género (primer año)"
+  descripcion: "Igual que 'Paridad de género — matrícula total' pero calculada solo sobre la cohorte de primer año."
+  calculo: "Misma banda trapezoidal 40-60% aplicada a la participación femenina en matrícula de primer año, ponderada por celda. Utils/data_prep.py::add_parity_scores/_parity_score, líneas 460-521."
+  fuente: "SIES — Matricula_2007_2025_WEB_15_07_2025.csv"
+  unidad: "score 0-100"
+  orientacion: "mayor_es_mejor"
+  estado: "activa"
+
+prop_matricula_posgrado_ies:
+  dimension: "Matrícula"
+  origen: "creada"
+  nombre: "Participación de posgrado en la institución"
+  descripcion: "Qué proporción de toda la matrícula de la institución (todas las APDAs y niveles) corresponde a programas de posgrado. Es un atributo de la institución, no de la APDA específica — el mismo valor se repite en todas las APDAs de una misma IES."
+  calculo: "Suma de matrícula en programas de posgrado / matrícula total de la IES, calculada una vez por institución y difundida a todas sus filas. Build_master_dataset.py, líneas 104-128."
+  fuente: "SIES — Matricula_2007_2025_WEB_15_07_2025.csv"
+  unidad: "proporción (0-1)"
+  orientacion: "mayor_es_mejor"
+  estado: "retirada"
+  notas: "Retirada 2026-08-18: era institution-constant (broadcast del mismo valor a todas las APDAs de la IES), sin variación real intra-institución. Reemplazada por prop_matricula_posgrado_apda, una razón real por celda IES×APDA (Utils/data_prep.py::add_prop_matricula_posgrado_apda). El cálculo original queda en Build_master_dataset.py sin usarse, por continuidad."
+
+prop_matricula_posgrado_apda:
+  dimension: "Matrícula"
+  origen: "creada"
+  nombre: "Participación de posgrado en la APDA"
+  nombre_corto: "Participación de posgrado"
+  descripcion: "Dentro de esta APDA de la institución, qué proporción de la matrícula corresponde a programas de posgrado (Magíster + Especialidad Médica u Odontológica). A diferencia de la retirada prop_matricula_posgrado_ies, varía entre APDAs de una misma IES."
+  calculo: "Suma de 'total matrícula' en programas con nivel carrera en {Magister, Especialidad Médica U Odontológica}, agrupada por celda IES×APDA, dividida por la suma de 'total matrícula' de todos los programas (cualquier nivel) de esa misma celda. Utils/data_prep.py::add_prop_matricula_posgrado_apda."
+  fuente: "SIES — Matricula_2007_2025_WEB_15_07_2025.csv + Oferta_Academica_2010_al_2025_SIES_02_06_2025_WEB_E.csv (nivel carrera)"
+  unidad: "proporción (0-1)"
+  orientacion: "mayor_es_mejor"
+  estado: "activa"
+
+prop_matricula_doctorado_apda:
+  dimension: "Matrícula Doctorado"
+  origen: "creada"
+  nombre: "Participación de doctorado dentro del posgrado de la APDA"
+  nombre_corto: "Participación de doctorado"
+  descripcion: "Dentro de la matrícula de posgrado de esta APDA (Magíster + Especialidad Médica u Odontológica), qué proporción corresponde específicamente a programas de Doctorado. NaN en celdas sin matrícula de Magíster/Especialidad Médica (sin población de posgrado con la que comparar)."
+  calculo: "Suma de 'total matrícula' en programas con nivel carrera == 'Doctorado', agrupada por celda IES×APDA, dividida por la misma suma de Magíster + Especialidad Médica U Odontológica usada como numerador de prop_matricula_posgrado_apda. Utils/data_prep.py::add_prop_matricula_posgrado_apda."
+  fuente: "SIES — Matricula_2007_2025_WEB_15_07_2025.csv + Oferta_Academica_2010_al_2025_SIES_02_06_2025_WEB_E.csv (nivel carrera)"
+  unidad: "proporción (0-1)"
+  orientacion: "mayor_es_mejor"
+  estado: "activa"
+
+prop_matricula_especialidad_apda:
+  dimension: "Matrícula Especialidades"
+  origen: "creada"
+  nombre: "Participación de especialidad médica dentro del posgrado de la APDA"
+  nombre_corto: "Participación de especialidad médica"
+  descripcion: "Dentro de la matrícula de posgrado de esta APDA (Magíster + Especialidad Médica u Odontológica), qué proporción corresponde específicamente a Especialidad Médica U Odontológica. Sólo se puntúa en el APDA 'Salud y bienestar' — es NaN en los otros tres APDA de cada IES, porque este nivel carrera no existe fuera de Salud. Confirmada 2026-09-07 en el eje Docencia (y) vía axes_by_apda en Vector/config.yaml."
+  calculo: "Suma de 'total matrícula' en programas con nivel carrera == 'Especialidad Médica U Odontológica', agrupada por celda IES×APDA, dividida por la misma suma de Magíster + Especialidad Médica U Odontológica usada como denominador de prop_matricula_doctorado_apda, luego .where(apda == 'Salud y bienestar'). Utils/data_prep.py::add_prop_matricula_posgrado_apda."
+  fuente: "SIES — Matricula_2007_2025_WEB_15_07_2025.csv + Oferta_Academica_2010_al_2025_SIES_02_06_2025_WEB_E.csv (nivel carrera)"
+  unidad: "proporción (0-1)"
+  orientacion: "mayor_es_mejor"
+  estado: "activa"
+
+arancel_anual_index:
+  dimension: "Costo"
+  origen: "creada"
+  nombre: "Índice de costo relativo (arancel anual)"
+  nombre_corto: "Índice de costo (arancel)"
+  descripcion: "Qué tan caro o barato es el arancel anual del programa en comparación con el resto de programas de su misma APDA. Un valor negativo indica un arancel más barato que el promedio de la APDA; positivo, más caro."
+  calculo: "Se centra el arancel anual en la media de la APDA (→0) y se escala por la distancia al máximo de la APDA (si está sobre la media) o al mínimo (si está bajo la media), acotando a [-1, 1]. Utils/data_prep.py, líneas 129-136."
+  fuente: "SIES Oferta Académica — Oferta_Academica_2010_al_2025_SIES_02_06_2025_WEB_E.csv"
+  unidad: "índice adimensional [-1, 1]"
+  orientacion: "menor_es_mejor"
+  estado: "activa"
+  notas: "direction: -1 en los config.yaml — un arancel más bajo puntúa mejor. Vivió en la dimensión 'Trayectoria' desde que se eliminó la dimensión 'Costo' original el 2026-08-24; el 2026-08-26 volvió a su propia dimensión 'Costo' (reinstalada), con 5 pts de peso del eje Docencia tomados de 'Trayectoria'."
+
+pct_tes_particular_pagado_apda:
+  dimension: "Costo"
+  origen: "creada"
+  nombre: "% de estudiantes de establecimiento particular pagado (TES)"
+  nombre_corto: "% TES particular pagado"
+  descripcion: "Dentro de esta APDA de la institución, qué porcentaje de los estudiantes con dependencia de origen (TES) conocida vienen de un establecimiento secundario particular pagado. Proxy del perfil socioeconómico del estudiantado, usado como señal de costo/accesibilidad complementaria al arancel."
+  calculo: "Se colapsan primero las filas de programa a nivel I/S/C/J (institución×sede×carrera×jornada, ignorando versión) sumando 'tes particular pagado' y 'total tes'; luego esos totales por programa se suman a nivel IES×APDA y se divide 100 × suma(tes particular pagado) / suma(total tes). Utils/data_prep.py::add_pct_tes_particular_pagado_apda."
+  fuente: "SIES — Matricula_2007_2025_WEB_15_07_2025.csv (columnas TES)"
+  unidad: "porcentaje (0-100)"
+  orientacion: "menor_es_mejor"
+  estado: "activa"
+  notas: "direction: -1 en los config.yaml — mayor % de origen particular pagado puntúa peor (menos accesible/más caro). Numerador restringido a TES PARTICULAR PAGADO (no incluye PARTICULAR SUBVENCIONADO), por decisión explícita al definir la variable."
+
+anid_apda_monto_mean_adjudicados:
+  dimension: "Investigación ANID (APDA)"
+  nombre: "Monto ANID promedio (todos los fondos, adjudicados 2025)"
+  descripcion: "Monto promedio adjudicado por proyectos ANID con fallo en 2025, entre todos los tipos de fondo, agregado a nivel IES×APDA."
+  calculo: "Promedio de MONTO_ADJUDICADO de proyectos ANID con AGNO_FALLO==2025, agrupados por ies_norm + apda. Exploration and data completion/Exp_ANID.py, función _aggregate_view (vista anid_univ_adjudicados), líneas 173-217."
+  fuente: "ANID — BDH_HISTORICA.xlsx"
+  unidad: "CLP"
+  orientacion: "mayor_es_mejor"
+  estado: "retirada"
+  notas: "Antes de 2026-08-03 esta variable se llamaba anid_apda_monto_mean; renombrada al agregar la vista anid_apda_*_activos. Comentada en dimensions: de ambos config.yaml el 2026-08-03 y reemplazada en el puntaje por anid_apda_monto_mean_activos, que mide el portafolio vigente durante 2025 en vez de sólo lo adjudicado ese año. Se mantiene calculada en dfs/catalogos/anid_ies_apda.csv y en el master dataset."
+
+anid_apda_monto_mean_activos:
+  dimension: "Investigación ANID (APDA)"
+  origen: "recolectada"
+  nombre: "Monto ANID promedio (todos los fondos, activos 2025)"
+  nombre_corto: "Media montos ANID"
+  descripcion: "Monto promedio adjudicado por proyectos ANID activos durante 2025 (incluye proyectos plurianuales adjudicados en años anteriores aún vigentes), entre todos los tipos de fondo, agregado a nivel IES×APDA."
+  calculo: "Promedio de MONTO_ADJUDICADO de proyectos ANID con AGNO_FALLO <= 2025 <= agno_fin, agrupados por ies_norm + apda, donde agno_fin = AGNO_FALLO + ceil(duración imputada en meses / 12) − 1. La duración se imputa (mediana por PROGRAMA+INSTRUMENTO, o por PROGRAMA si esa combinación no tiene comparables) cuando DURACION_MESES es nula (~4.8% de las filas). Exploration and data completion/Exp_ANID.py, líneas 41-64 (imputación y ventana) y función _aggregate_view (vista anid_univ_activos), líneas 173-217."
+  fuente: "ANID — BDH_HISTORICA.xlsx"
+  unidad: "CLP"
+  orientacion: "mayor_es_mejor"
+  estado: "activa"
+  notas: "Activada en el puntaje el 2026-08-03 en reemplazo de anid_apda_monto_mean_adjudicados: mide el portafolio ANID vigente durante 2025 (mejor cobertura — 220 vs 177 celdas IES×APDA con dato — y menos imputación). Ojo con la unidad: MONTO_ADJUDICADO es el monto total del proyecto, así que el promedio mezcla montos plurianuales completos y NO representa el gasto del año 2025. Se evaluó una variante anualizada (monto / duración en años) y se decidió no construirla por ahora."
+
+anid_apda_n_proyectos_fondecyt_adjudicados:
+  dimension: "Investigación ANID (APDA)"
+  nombre: "N° de proyectos FONDECYT (adjudicados 2025)"
+  descripcion: "Cantidad de proyectos ANID de la categoría FONDECYT con fallo en 2025, adjudicados a investigadores de la APDA, a nivel IES×APDA."
+  calculo: "Conteo de proyectos ANID con AGNO_FALLO==2025 filtrados a la categoría FONDECYT, agrupados por ies_norm + apda (pivote por categoría). Exploration and data completion/Exp_ANID.py, función _aggregate_view (vista anid_univ_adjudicados), líneas 173-217."
+  fuente: "ANID — BDH_HISTORICA.xlsx"
+  unidad: "N° de proyectos"
+  orientacion: "mayor_es_mejor"
+  estado: "retirada"
+  notas: "Ver anid_apda_monto_mean_adjudicados — retirada del puntaje el 2026-08-03 por el mismo motivo, en favor de su contraparte _activos."
+
+anid_apda_n_proyectos_fondecyt_activos:
+  dimension: "Investigación ANID (APDA)"
+  origen: "recolectada"
+  nombre: "N° de proyectos FONDECYT (activos 2025)"
+  nombre_corto: "N° proyectos FONDECYT"
+  descripcion: "Cantidad de proyectos ANID de la categoría FONDECYT activos durante 2025 (adjudicados en 2025 o en años previos, aún vigentes), a nivel IES×APDA."
+  calculo: "Conteo de proyectos ANID de la categoría FONDECYT con AGNO_FALLO <= 2025 <= agno_fin, agrupados por ies_norm + apda. Ver anid_apda_monto_mean_activos para el detalle de la ventana e imputación de duración."
+  fuente: "ANID — BDH_HISTORICA.xlsx"
+  unidad: "N° de proyectos"
+  orientacion: "mayor_es_mejor"
+  estado: "activa"
+  notas: "Ver anid_apda_monto_mean_activos — activada en el puntaje el 2026-08-03 en reemplazo de su contraparte _adjudicados."
+
+anid_apda_monto_mean_fondecyt_adjudicados:
+  dimension: "Investigación ANID (APDA)"
+  nombre: "Monto ANID promedio — FONDECYT (adjudicados 2025)"
+  descripcion: "Monto promedio adjudicado por proyectos ANID de la categoría FONDECYT con fallo en 2025, a nivel IES×APDA."
+  calculo: "Promedio de MONTO_ADJUDICADO restringido a proyectos FONDECYT con AGNO_FALLO==2025, agrupado por ies_norm + apda. Exploration and data completion/Exp_ANID.py, función _aggregate_view (vista anid_univ_adjudicados), líneas 173-217."
+  fuente: "ANID — BDH_HISTORICA.xlsx"
+  unidad: "CLP"
+  orientacion: "mayor_es_mejor"
+  estado: "retirada"
+  notas: "Ver anid_apda_monto_mean_adjudicados — retirada del puntaje el 2026-08-03 por el mismo motivo, en favor de su contraparte _activos."
+
+anid_apda_monto_mean_fondecyt_activos:
+  dimension: "Investigación ANID (APDA)"
+  origen: "recolectada"
+  nombre: "Monto ANID promedio — FONDECYT (activos 2025)"
+  nombre_corto: "Media montos FONDECYT"
+  descripcion: "Monto promedio adjudicado por proyectos ANID de la categoría FONDECYT activos durante 2025, a nivel IES×APDA."
+  calculo: "Promedio de MONTO_ADJUDICADO restringido a proyectos FONDECYT con AGNO_FALLO <= 2025 <= agno_fin, agrupado por ies_norm + apda. Ver anid_apda_monto_mean_activos para el detalle de la ventana e imputación de duración."
+  fuente: "ANID — BDH_HISTORICA.xlsx"
+  unidad: "CLP"
+  orientacion: "mayor_es_mejor"
+  estado: "activa"
+  notas: "Ver anid_apda_monto_mean_activos — activada en el puntaje el 2026-08-03 en reemplazo de su contraparte _adjudicados; aplica la misma advertencia sobre el monto total del proyecto (no es gasto del año 2025)."
+
+anid_apda_n_proyectos_no_fondecyt_adjudicados:
+  dimension: "Investigación ANID (APDA)"
+  nombre: "N° de proyectos ANID (no FONDECYT, adjudicados 2025)"
+  descripcion: "Cantidad de proyectos ANID que no pertenecen a la categoría FONDECYT ni a 'otros fondos', con fallo en 2025, adjudicados a la APDA."
+  calculo: "Conteo de proyectos ANID con AGNO_FALLO==2025 de la categoría 'no FONDECYT', agrupados por ies_norm + apda. Exploration and data completion/Exp_ANID.py, función _aggregate_view (vista anid_univ_adjudicados), líneas 173-217."
+  fuente: "ANID — BDH_HISTORICA.xlsx"
+  unidad: "N° de proyectos"
+  orientacion: "mayor_es_mejor"
+  estado: "retirada"
+  notas: "Ver anid_apda_monto_mean_adjudicados — retirada del puntaje el 2026-08-03 por el mismo motivo, en favor de su contraparte _activos."
+
+anid_apda_n_proyectos_no_fondecyt_activos:
+  dimension: "Investigación ANID (APDA)"
+  origen: "recolectada"
+  nombre: "N° de proyectos ANID (no FONDECYT, activos 2025)"
+  nombre_corto: "N° proyectos ANID (no FONDECYT)"
+  descripcion: "Cantidad de proyectos ANID que no pertenecen a la categoría FONDECYT ni a 'otros fondos', activos durante 2025, adjudicados a la APDA."
+  calculo: "Conteo de proyectos ANID de la categoría 'no FONDECYT' con AGNO_FALLO <= 2025 <= agno_fin, agrupados por ies_norm + apda. Ver anid_apda_monto_mean_activos para el detalle de la ventana e imputación de duración."
+  fuente: "ANID — BDH_HISTORICA.xlsx"
+  unidad: "N° de proyectos"
+  orientacion: "mayor_es_mejor"
+  estado: "activa"
+  notas: "Ver anid_apda_monto_mean_activos — activada en el puntaje el 2026-08-03 en reemplazo de su contraparte _adjudicados."
+
+anid_apda_monto_mean_no_fondecyt_adjudicados:
+  dimension: "Investigación ANID (APDA)"
+  nombre: "Monto ANID promedio — no FONDECYT (adjudicados 2025)"
+  descripcion: "Monto promedio adjudicado por proyectos ANID que no son FONDECYT ni 'otros fondos', con fallo en 2025, a nivel IES×APDA."
+  calculo: "Promedio de MONTO_ADJUDICADO restringido a la categoría 'no FONDECYT' con AGNO_FALLO==2025, agrupado por ies_norm + apda. Exploration and data completion/Exp_ANID.py, función _aggregate_view (vista anid_univ_adjudicados), líneas 173-217."
+  fuente: "ANID — BDH_HISTORICA.xlsx"
+  unidad: "CLP"
+  orientacion: "mayor_es_mejor"
+  estado: "retirada"
+  notas: "Ver anid_apda_monto_mean_adjudicados — retirada del puntaje el 2026-08-03 por el mismo motivo, en favor de su contraparte _activos."
+
+anid_apda_monto_mean_no_fondecyt_activos:
+  dimension: "Investigación ANID (APDA)"
+  origen: "recolectada"
+  nombre: "Monto ANID promedio — no FONDECYT (activos 2025)"
+  nombre_corto: "Media montos ANID (no FONDECYT)"
+  descripcion: "Monto promedio adjudicado por proyectos ANID que no son FONDECYT ni 'otros fondos', activos durante 2025, a nivel IES×APDA."
+  calculo: "Promedio de MONTO_ADJUDICADO restringido a la categoría 'no FONDECYT' con AGNO_FALLO <= 2025 <= agno_fin, agrupado por ies_norm + apda. Ver anid_apda_monto_mean_activos para el detalle de la ventana e imputación de duración."
+  fuente: "ANID — BDH_HISTORICA.xlsx"
+  unidad: "CLP"
+  orientacion: "mayor_es_mejor"
+  estado: "activa"
+  notas: "Ver anid_apda_monto_mean_activos — activada en el puntaje el 2026-08-03 en reemplazo de su contraparte _adjudicados; aplica la misma advertencia sobre el monto total del proyecto (no es gasto del año 2025)."
+
+anid_apda_n_proyectos_otros_fondecyt_adjudicados:
+  dimension: "Investigación ANID (APDA)"
+  nombre: "N° de proyectos ANID (otros fondos, adjudicados 2025)"
+  descripcion: "Cantidad de proyectos ANID de categorías de fondo distintas a FONDECYT y a 'no FONDECYT' (fondos misceláneos), con fallo en 2025, adjudicados a la APDA."
+  calculo: "Conteo de proyectos ANID con AGNO_FALLO==2025 de la categoría 'otros fondos', agrupados por ies_norm + apda. Exploration and data completion/Exp_ANID.py, función _aggregate_view (vista anid_univ_adjudicados), líneas 173-217."
+  fuente: "ANID — BDH_HISTORICA.xlsx"
+  unidad: "N° de proyectos"
+  orientacion: "mayor_es_mejor"
+  estado: "retirada"
+  notas: "Ver anid_apda_monto_mean_adjudicados — retirada del puntaje el 2026-08-03 por el mismo motivo, en favor de su contraparte _activos."
+
+anid_apda_n_proyectos_otros_fondecyt_activos:
+  dimension: "Investigación ANID (APDA)"
+  origen: "recolectada"
+  nombre: "N° de proyectos ANID (otros fondos, activos 2025)"
+  nombre_corto: "N° proyectos ANID (otros fondos)"
+  descripcion: "Cantidad de proyectos ANID de categorías de fondo distintas a FONDECYT y a 'no FONDECYT' (fondos misceláneos), activos durante 2025, adjudicados a la APDA."
+  calculo: "Conteo de proyectos ANID de la categoría 'otros fondos' con AGNO_FALLO <= 2025 <= agno_fin, agrupados por ies_norm + apda. Ver anid_apda_monto_mean_activos para el detalle de la ventana e imputación de duración."
+  fuente: "ANID — BDH_HISTORICA.xlsx"
+  unidad: "N° de proyectos"
+  orientacion: "mayor_es_mejor"
+  estado: "activa"
+  notas: "Ver anid_apda_monto_mean_activos — activada en el puntaje el 2026-08-03 en reemplazo de su contraparte _adjudicados."
+
+anid_apda_monto_mean_otros_fondecyt_adjudicados:
+  dimension: "Investigación ANID (APDA)"
+  nombre: "Monto ANID promedio — otros fondos (adjudicados 2025)"
+  descripcion: "Monto promedio adjudicado por proyectos ANID de categorías de fondo distintas a FONDECYT y 'no FONDECYT', con fallo en 2025, a nivel IES×APDA."
+  calculo: "Promedio de MONTO_ADJUDICADO restringido a la categoría 'otros fondos' con AGNO_FALLO==2025, agrupado por ies_norm + apda. Exploration and data completion/Exp_ANID.py, función _aggregate_view (vista anid_univ_adjudicados), líneas 173-217."
+  fuente: "ANID — BDH_HISTORICA.xlsx"
+  unidad: "CLP"
+  orientacion: "mayor_es_mejor"
+  estado: "retirada"
+  notas: "Ver anid_apda_monto_mean_adjudicados — retirada del puntaje el 2026-08-03 por el mismo motivo, en favor de su contraparte _activos."
+
+anid_apda_monto_mean_otros_fondecyt_activos:
+  dimension: "Investigación ANID (APDA)"
+  origen: "recolectada"
+  nombre: "Monto ANID promedio — otros fondos (activos 2025)"
+  nombre_corto: "Media montos ANID (otros fondos)"
+  descripcion: "Monto promedio adjudicado por proyectos ANID de categorías de fondo distintas a FONDECYT y 'no FONDECYT', activos durante 2025, a nivel IES×APDA."
+  calculo: "Promedio de MONTO_ADJUDICADO restringido a la categoría 'otros fondos' con AGNO_FALLO <= 2025 <= agno_fin, agrupado por ies_norm + apda. Ver anid_apda_monto_mean_activos para el detalle de la ventana e imputación de duración."
+  fuente: "ANID — BDH_HISTORICA.xlsx"
+  unidad: "CLP"
+  orientacion: "mayor_es_mejor"
+  estado: "activa"
+  notas: "Ver anid_apda_monto_mean_activos — activada en el puntaje el 2026-08-03 en reemplazo de su contraparte _adjudicados; aplica la misma advertencia sobre el monto total del proyecto (no es gasto del año 2025)."
+
+scimago_apda_score_w:
+  dimension: "Producción Científica (APDA)"
+  origen: "creada"
+  nombre: "Score SCImago (ponderado por cobertura)"
+  nombre_corto: "Ranking Scimago"
+  descripcion: "Desempeño en rankings de investigación SCImago de la institución en las disciplinas asociadas a la APDA. Penaliza a instituciones que no aparecen rankeadas en alguna disciplina de la APDA (se les asigna 0 en esa disciplina en vez de excluirlas)."
+  calculo: "Para cada disciplina SCImago mapeada a la APDA: pct_score = (n_disciplinas − ranking + 1) / n_disciplinas × 100 (mayor ranking relativo = mejor). Se promedia entre disciplinas y se multiplica por un ratio de cobertura (fracción de disciplinas de la APDA en que la institución aparece rankeada). Exploration and data completion/Exp_SCIMAGO.py, líneas 61-90."
+  fuente: "SCImago — chilean_universities_subject_ranks.csv"
+  unidad: "score 0-100"
+  orientacion: "mayor_es_mejor"
+  estado: "activa"
+
+scival_apda_papers:
+  dimension: "Producción Científica (APDA)"
+  origen: "recolectada"
+  nombre: "Publicaciones científicas (SciVal)"
+  nombre_corto: "Productividad Scopus (SciVal)"
+  descripcion: "Cantidad de publicaciones (papers) de la institución en las disciplinas SciVal asociadas a la APDA."
+  calculo: "Suma de 'valor_corregido_2025' (conteo de papers) entre las disciplinas SciVal mapeadas a la APDA, por IES×APDA. Exploration and data completion/Exp_SCIVAL.py, líneas 71-76."
+  fuente: "SciVal — scival_subject_corrected_2025.csv"
+  unidad: "N° de papers"
+  orientacion: "mayor_es_mejor"
+  estado: "activa"
+
+n_de_jce_de_la_institucion_que_trabajan_en_1_o_mas_instituciones_en_1_institucion:
+  dimension: "JCE"
+  nombre: "Académicos JCE exclusivos de la institución"
+  descripcion: "Cantidad de jornadas completas equivalentes (JCE) de académicos de la institución que trabajan solo en esa institución (no comparten su jornada con otras universidades)."
+  calculo: "Conteo directo desde la hoja PAC de JCE por institución, sin ponderación adicional por matrícula (constante dentro de la IES, se repite en todas sus APDAs)."
+  fuente: "SIES PAC web — PAC_web_2008_2025_SIES_EE.xlsx, hoja BD_Académicos_JCE"
+  unidad: "N° de jornadas (JCE)"
+  orientacion: "mayor_es_mejor"
+  estado: "retirada"
+  notas: "Retirada 2026-08-13: como conteo crudo, escala con el tamaño de la institución en vez de con la exclusividad real (una IES grande gana en headcount aunque una porción menor de su JCE sea exclusiva). Reemplazada por pct_jce_1inst (mismo numerador, dividido por el JCE total institucional). Al ser un valor institucional (no varía entre APDAs de la misma IES), no discrimina entre APDAs de una misma institución."
+
+pct_jce_1inst:
+  dimension: "JCE"
+  origen: "creada"
+  nombre: "% JCE exclusivo de la institución (constante institucional)"
+  descripcion: "Qué porcentaje del JCE total de la institución corresponde a académicos que trabajan solo en esa institución (no comparten su jornada con otras universidades). Constante por IES — se repite en las cuatro celdas IES×APDA de una misma institución, porque PAC no reporta esta desagregación por área del conocimiento."
+  calculo: "n_de_jce_de_la_institucion_que_trabajan_en_1_o_mas_instituciones_en_1_institucion / n_de_jce_por_institucion_total_general × 100. Exploration and data completion/Exp_SIES.py (bloque 'JCE weights'). Constante dentro de IES → agregada por 'first' en Utils/data_prep.py::aggregate_ies_apda_rich."
+  fuente: "SIES PAC web — PAC_web_2008_2025_SIES_EE.xlsx, hoja BD_Académicos_JCE"
+  unidad: "% (0-100)"
+  orientacion: "mayor_es_mejor"
+  estado: "retirada"
+  notas: "Reemplaza al conteo crudo n_de_jce_de_la_institucion_que_trabajan_en_1_o_mas_instituciones_en_1_institucion desde el 13-08-2026 — mismo numerador, ahora expresado como proporción del JCE institucional total en vez de headcount absoluto. Comentada de nuevo 2026-08-13 en ambos config.yaml (branches) por decisión del usuario, sin reemplazo activo."
+
+jce_por_estudiantes:
+  dimension: "JCE"
+  origen: "creada"
+  nombre: "JCE por estudiante (constante institucional)"
+  nombre_corto: "JCE por estudiante"
+  descripcion: "Cuántas jornadas completas equivalentes (JCE) de académicos tiene la institución por cada estudiante matriculado. Razón cruda (no expresada como %), a diferencia de pct_jce_doctor/magister/especialidad/academicos_39, que son composición interna del JCE. Constante por IES: se repite en las cuatro celdas IES×APDA de una misma institución."
+  calculo: "n_de_jce_por_institucion_total_general / matrícula total institucional, excluyendo Postítulo del denominador pero manteniendo Especialidad Médica u Odontológica (que 'nivel global'=='Postítulo' absorbería incorrectamente si no se excluye explícitamente vía 'nivel carrera'). Exploration and data completion/Exp_SIES.py (bloque 'JCE weights'). Constante dentro de IES → agregada por 'first' en Utils/data_prep.py::aggregate_ies_apda_rich."
+  fuente: "SIES PAC web — PAC_web_2008_2025_SIES_EE.xlsx, hoja BD_Académicos_JCE; matrícula desde SIES mat/of."
+  unidad: "razón (JCE / estudiante)"
+  orientacion: "mayor_es_mejor"
+  estado: "activa"
+  notas: "Agregada 2026-08-13 a pedido del usuario — primera variable JCE que mide intensidad de dotación relativa a matrícula, en vez de composición interna del JCE."
+
+paridad_jce:
+  dimension: "JCE"
+  origen: "creada"
+  nombre: "Paridad de género — dotación JCE"
+  descripcion: "Qué tan equilibrada está la dotación de jornadas completas equivalentes (JCE) de la institución entre hombres y mujeres. Máximo cuando la participación femenina está entre 40% y 60%."
+  calculo: "Participación femenina = suma JCE mujeres / (suma JCE mujeres + suma JCE hombres) por celda, banda trapezoidal 40-60%. Utils/data_prep.py::add_parity_scores/_parity_score, líneas 460-521."
+  fuente: "SIES PAC web — PAC_web_2008_2025_SIES_EE.xlsx, hoja BD_Académicos_JCE"
+  unidad: "score 0-100"
+  orientacion: "mayor_es_mejor"
+  estado: "retirada"
+  notas: "Reemplazó a n_de_jce_por_institucion_total_hombres/mujeres como par de variables independientes, por la misma razón que paridad_matricula: penaliza el desequilibrio en vez de premiar linealmente un solo sexo. Comentada en dimensions de Vector/config.yaml y Archetypes/config.yaml el 2026-08-18."
+
+w_mat:
+  dimension: "JCE"
+  nombre: "Dotación docente total (JCE), ponderada por matrícula"
+  descripcion: "Proxy de esfuerzo académico total de la institución asignado al programa, proporcional a cuánta matrícula concentra ese programa dentro de la IES. Desde el 28-07-2026 el allocator excluye matrícula Postítulo (no es un nivel de titulación) y se amortigua por n_apda_activas — instituciones con pocas APDAs activas antes recibían una participación inflada de su propio JCE en cada una de ellas (corr. con cobertura de APDA: 0.255 → 0.093 en producción). Es una corrección parcial, no completa — instituciones más grandes/comprehensivas genuinemente tienden a tener más JCE total y más cobertura a la vez (correlación de tamaño con cobertura ≈0.5), así que algo de correlación residual es real, no un artefacto de fórmula."
+  calculo: "JCE total de la institución × _allocator, donde _allocator = (matrícula del programa, excl. Postítulo / matrícula total de la IES, excl. Postítulo) / n_apda_activas; reescalada 0-100. Exploration and data completion/Exp_SIES.py, líneas 675-778."
+  fuente: "SIES PAC web — PAC_web_2008_2025_SIES_EE.xlsx, hoja BD_Académicos_JCE"
+  unidad: "índice 0-100"
+  orientacion: "mayor_es_mejor"
+  estado: "retirada"
+  notas: "Comentada el 29-07-2026 de dimensions.JCE en ambos config.yaml, mientras no exista un diagnóstico definitivo para los problemas del esquema de ponderación JCE (cobertura de APDAs, inflación por baja diversificación, etc.) — ver carpeta Inspection JCE/. Se mantiene calculada en el pipeline y en los CSV, sólo excluida del puntaje del modelo."
+
+promedio_puntaje:
+  dimension: "Selectividad"
+  origen: "recolectada"
+  nombre: "Puntaje promedio de ingreso"
+  descripcion: "Puntaje promedio (PSU/PAES, promedio matemática-lenguaje) de los estudiantes que ingresaron al programa."
+  calculo: "Renombre directo de 'Promedio Puntaje (promedio matemáticas y lenguaje)'. Exploration and data completion/Exp_CNED.py, líneas 53-55."
+  fuente: "CNED — BaseINDICES-2005-2025.xlsx"
+  unidad: "puntaje PSU/PAES"
+  orientacion: "mayor_es_mejor"
+  estado: "retirada"
+  notas: "Retirada 2026-08-18 — la agregación a IES×APDA era una media simple sobre filas I/S/C/J/V crudas (match exacto a CNED, 22.3% cobertura), sin deduplicar por programa: una carrera ofrecida en varias jornadas/sedes pesaba más de una vez en la celda. Reemplazada por promedio_puntaje_apda."
+
+minimo_puntaje:
+  dimension: "Selectividad"
+  origen: "recolectada"
+  nombre: "Puntaje mínimo de ingreso"
+  descripcion: "Puntaje más bajo con el que un estudiante fue admitido al programa (piso de exigencia efectivo del proceso de selección)."
+  calculo: "Renombre directo de 'Mínimo Puntaje'. Exploration and data completion/Exp_CNED.py, líneas 53-55."
+  fuente: "CNED — BaseINDICES-2005-2025.xlsx"
+  unidad: "puntaje PSU/PAES"
+  orientacion: "mayor_es_mejor"
+  estado: "retirada"
+  notas: "Cobertura intrínsecamente limitada, igual que promedio_puntaje. Comentada en dimensions de Vector/config.yaml y Archetypes/config.yaml el 2026-08-18. A diferencia de promedio_puntaje/puntaje_corte, no tiene una versión _apda — se mantiene retirada sin reemplazo."
+
+puntaje_corte:
+  dimension: "Selectividad"
+  origen: "recolectada"
+  nombre: "Puntaje de corte"
+  descripcion: "Puntaje de corte de la última vacante de admisión regular del programa (promedio de la carrera)."
+  calculo: "Renombre directo de 'Puntaje de corte (promedio de la carrera)'. Exploration and data completion/Exp_CNED.py, líneas 53-55."
+  fuente: "CNED — BaseINDICES-2005-2025.xlsx"
+  unidad: "puntaje PSU/PAES"
+  orientacion: "mayor_es_mejor"
+  estado: "retirada"
+  notas: "Retirada 2026-08-18, mismo motivo que promedio_puntaje. Reemplazada por puntaje_corte_apda."
+
+promedio_puntaje_apda:
+  dimension: "Selectividad"
+  origen: "creada"
+  nombre: "Puntaje promedio de ingreso (por celda IES×APDA)"
+  nombre_corto: "Puntaje promedio Lenguaje y Matemática (M1)"
+  descripcion: "Puntaje promedio de ingreso (PSU/PAES) agregado a nivel IES×APDA: media simple, sin ponderar, entre los programas distintos de esa celda que tienen proceso de selección centralizado. Reemplaza a promedio_puntaje, evitando que la composición de jornadas/sedes de una carrera sesgue el resultado."
+  calculo: "Match CNED ampliado a institución×sede×carrera (I/S/C, sin jornada/versión) en Build_master_dataset.py — sube la cobertura de programas de 22.3% a 29.3% (donde ambos grados de match coinciden, acuerdan en 99.5% de los casos). Sobre ese universo, se deduplica a un valor por (IES×APDA, I/S/C) y se promedia sin ponderar por celda. Utils/data_prep.py::add_puntaje_seleccion."
+  fuente: "CNED — BaseINDICES-2005-2025.xlsx"
+  unidad: "puntaje PSU/PAES"
+  orientacion: "mayor_es_mejor"
+  estado: "activa"
+  notas: "Celdas sin ningún programa con proceso de selección centralizado quedan en NaN (mismo criterio 'sin oferta' que acred_posgrado_ajustado), no en 0. n_puntaje_programs (cantidad de programas I/S/C distintos que aportan a la celda) se exporta como columna de trazabilidad — NaN en la variable ⇔ n_puntaje_programs == 0."
+
+puntaje_corte_apda:
+  dimension: "Selectividad"
+  origen: "creada"
+  nombre: "Puntaje de corte (por celda IES×APDA)"
+  nombre_corto: "Puntaje de corte"
+  descripcion: "Puntaje de corte de la última vacante regular, agregado a nivel IES×APDA: media simple, sin ponderar, entre los programas distintos de esa celda que tienen proceso de selección centralizado. Reemplaza a puntaje_corte, mismo criterio que promedio_puntaje_apda."
+  calculo: "Idéntico a promedio_puntaje_apda (mismo match ampliado a I/S/C, mismo dedup, misma media simple), aplicado a 'Puntaje de corte (promedio de la carrera)'. Utils/data_prep.py::add_puntaje_seleccion."
+  fuente: "CNED — BaseINDICES-2005-2025.xlsx"
+  unidad: "puntaje PSU/PAES"
+  orientacion: "mayor_es_mejor"
+  estado: "activa"
+  notas: "Celdas sin ningún programa con proceso de selección centralizado quedan en NaN, mismo criterio que promedio_puntaje_apda. Comparte la columna de trazabilidad n_puntaje_programs con promedio_puntaje_apda (ambas variables son siempre co-nulas en la fuente CNED)."
+
+ret_1er_año:
+  dimension: "Trayectoria"
+  origen: "creada"
+  nombre: "Retención de primer año"
+  nombre_corto: "Retención primer año"
+  descripcion: "Proporción de estudiantes de la cohorte de ingreso 2024 que continuaron matriculados en el programa el año siguiente (2025)."
+  calculo: "n_2025 (matriculados año 2 de la cohorte 2024) / n_2024 (matriculados año 1 de la cohorte 2024), agrupado por código único de programa. Exploration and data completion/Exp_SIES.py, líneas 577-593."
+  fuente: "Retención — trayectoria_universidades.csv"
+  unidad: "proporción (0-1)"
+  orientacion: "mayor_es_mejor"
+  estado: "activa"
+
+sobreduracion_meses:
+  dimension: "Trayectoria"
+  origen: "creada"
+  nombre: "Sobreduración de titulación (meses)"
+  nombre_corto: "Sobreduración (meses)"
+  descripcion: "Exceso, en meses, de la duración real observada en titulados por sobre la duración nominal declarada en la oferta académica del programa. Solo se calcula para niveles de carrera donde el concepto de titulación aplica de forma comparable."
+  calculo: "(duracion_titulados_mean en años × 2 − duración total en semestres) × 6, excluyendo Bachillerato/Ciclo Inicial, Profesional Sin Licenciatura y Técnico de Nivel Superior. Utils/data_prep.py, líneas 145-161."
+  fuente: "MINEDUC Titulados (duración empírica) + SIES Oferta Académica (duración nominal)"
+  unidad: "meses"
+  orientacion: "menor_es_mejor"
+  estado: "activa"
+  notas: "direction: -1 en los config.yaml — menos sobreduración puntúa mejor. Ver también Vector/export_sobreduracion_uft.py (export ad-hoc a nivel programa para UFT)."
+
+empleabilidad_pond_1er_año:
+  dimension: "Empleabilidad"
+  origen: "recolectada"
+  nombre: "Empleabilidad al 1er año (ponderada por titulados)"
+  nombre_corto: "Empleabilidad al 1er año"
+  descripcion: "Proporción de titulados del programa que registran cotizaciones (empleo formal) durante el primer año tras la titulación, agregada a nivel IES×APDA ponderando cada carrera genérica por su volumen real de egresados en vez de por su matrícula."
+  calculo: "Match (cod_inst, nombre_carrera normalizado) contra el Buscador de Empleabilidad SIES (la fuente no publica sede/jornada/versión, así que un mismo valor se replica sobre todas las filas de programa que difieren en esas dimensiones). Agregación IES×APDA: F = Σ_g emp_g·T_g, N = Σ_g T_g sobre las carreras genéricas g de la celda con empleabilidad no nula; valor = F/N. T_g = titulados de esa (institución, carrera genérica) sumados en 2024+2023+2022 (dfs/catalogos/titulados_generica.csv, construido por Exp_Titulados_Generica.py a partir de MINEDUC Titulados Ed. Superior). Antes de sumar, se colapsa el fan-out sede/jornada/versión del match (empleabilidad es constante dentro de esa unidad) y se deduplica por carrera genérica, para no contar dos veces el mismo T_g. Si Σ T_g = 0 en la celda, cae a media simple de emp_g. Utils/data_prep.py::add_empleabilidad_ponderada."
+  fuente: "SIES — Buscador_Empleabilidad_ingresos_2025_2026_SIES (1).xlsx + MINEDUC Titulados Ed. Superior 2022-2024 + SIES Matrícula (mapa carrera→genérica)"
+  unidad: "proporción (0-1)"
+  orientacion: "mayor_es_mejor"
+  estado: "activa"
+  notas: "Reemplaza a empleabilidad_1er_año (retirada) en dimensions: de ambos config.yaml desde 2026-08-13. Misma cobertura de celdas IES×APDA que la variable retirada (161/204, 78.9%) — el cambio de peso no altera qué celdas tienen dato, sólo cómo se combinan los valores de sus carreras genéricas. Correlación con la versión ponderada por matrícula ≈0.97; delta típico pequeño, con algunas celdas que se mueven hasta ~0.2 cuando el peso de titulados diverge fuerte del de matrícula."
+
+empleabilidad_pond_2do_año:
+  dimension: "Empleabilidad"
+  origen: "recolectada"
+  nombre: "Empleabilidad al 2° año (ponderada por titulados)"
+  nombre_corto: "Empleabilidad al 2do año"
+  descripcion: "Proporción de titulados del programa que registran cotizaciones (empleo formal) durante el segundo año tras la titulación, agregada a nivel IES×APDA ponderando cada carrera genérica por su volumen real de egresados en vez de por su matrícula."
+  calculo: "Igual método que empleabilidad_pond_1er_año, con T_g = titulados de esa (institución, carrera genérica) sumados en 2023+2022+2021 — ventana desplazada un año, alineada a la cohorte que empleabilidad_2do_año mide (un año después de titulación). Utils/data_prep.py::add_empleabilidad_ponderada."
+  fuente: "SIES — Buscador_Empleabilidad_ingresos_2025_2026_SIES (1).xlsx + MINEDUC Titulados Ed. Superior 2021-2023 + SIES Matrícula (mapa carrera→genérica)"
+  unidad: "proporción (0-1)"
+  orientacion: "mayor_es_mejor"
+  estado: "activa"
+  notas: "Reemplaza a empleabilidad_2do_año (retirada) en dimensions: de ambos config.yaml desde 2026-08-13. Misma cobertura que la variable retirada (156/204, algo menor que 1er año porque el segundo año post-titulación tiene más 's/i' en la fuente SIES)."
+
+continuidad_estudios:
+  dimension: "Empleabilidad"
+  origen: "recolectada"
+  nombre: "Continuidad de estudios de titulados"
+  nombre_corto: "Continuidad de estudios"
+  descripcion: "Proporción de titulados del programa que continúan estudios formales (otro programa de educación superior) en vez de incorporarse al mercado laboral."
+  calculo: "Igual método de match y agregación que empleabilidad_1er_año, sobre la columna '% titulados con continuidad de estudios' del Buscador de Empleabilidad SIES."
+  fuente: "SIES — Buscador_Empleabilidad_ingresos_2025_2026_SIES (1).xlsx"
+  unidad: "proporción (0-1)"
+  orientacion: "mayor_es_mejor"
+  estado: "activa"
+  notas: "Cobertura parcial, igual a empleabilidad_1er_año (161/204 celdas). Ver 'Inspection Empleabilidad/'. Movida 2026-08-26 de la dimensión 'Trayectoria' a 'Empleabilidad'."
+
+# ─────────────────────────────────────────────────────────────────────────
+# Variables retiradas (comentadas en dimensions:/direction: de los config.yaml)
+# ─────────────────────────────────────────────────────────────────────────
+
+empleabilidad_1er_año:
+  dimension: "Empleabilidad"
+  nombre: "Empleabilidad al 1er año"
+  descripcion: "Proporción de titulados del programa que registran cotizaciones (empleo formal) durante el primer año tras la titulación."
+  calculo: "Match (cod_inst, nombre_carrera normalizado) contra el Buscador de Empleabilidad SIES — la fuente no publica sede/jornada/versión, así que un mismo valor se replica sobre todas las filas de programa que difieren en esas dimensiones. Agregación IES×APDA por media ponderada por matrícula, NaN-aware (Utils/data_prep.py::aggregate_ies_apda_rich, WEIGHTED_FEATS_PREFIXES)."
+  fuente: "SIES — Buscador_Empleabilidad_ingresos_2025_2026_SIES (1).xlsx"
+  unidad: "proporción (0-1)"
+  orientacion: "mayor_es_mejor"
+  estado: "retirada"
+  notas: "Retirada de dimensions: en ambos config.yaml el 2026-08-13, en favor de empleabilidad_pond_1er_año (ponderada por titulados de la carrera genérica en vez de por matrícula del programa). La columna sigue calculándose en ies_apda_features.csv (WEIGHTED_FEATS_PREFIXES en data_prep.py no cambió), pero ya no entra al scoring. Ver 'Inspection Empleabilidad/' para el análisis original de cobertura y duplicación."
+
+empleabilidad_2do_año:
+  dimension: "Empleabilidad"
+  nombre: "Empleabilidad al 2° año"
+  descripcion: "Proporción de titulados del programa que registran cotizaciones (empleo formal) durante el segundo año tras la titulación."
+  calculo: "Igual método que empleabilidad_1er_año (mismo match y misma agregación ponderada por matrícula)."
+  fuente: "SIES — Buscador_Empleabilidad_ingresos_2025_2026_SIES (1).xlsx"
+  unidad: "proporción (0-1)"
+  orientacion: "mayor_es_mejor"
+  estado: "retirada"
+  notas: "Retirada de dimensions: en ambos config.yaml el 2026-08-13, en favor de empleabilidad_pond_2do_año. Misma razón que empleabilidad_1er_año. Cobertura parcial, algo menor (156/204 celdas): el segundo año post-titulación tiene más 's/i' en la fuente. Ver 'Inspection Empleabilidad/'."
+
+pct_matricula_hombres:
+  dimension: "Matrícula"
+  nombre: "Participación de hombres en la matrícula"
+  descripcion: "Proporción de la matrícula total del programa que corresponde a hombres."
+  calculo: "total matrícula hombres / total matrícula. Utils/data_prep.py, líneas 122-124."
+  fuente: "SIES — Matricula_2007_2025_WEB_15_07_2025.csv"
+  unidad: "proporción (0-1)"
+  orientacion: "mayor_es_mejor"
+  estado: "retirada"
+  notas: "Retirada de dimensions: en ambos config.yaml en favor de paridad_matricula/paridad_matricula_primer_año (score de género único que penaliza ambos extremos en vez de premiar linealmente un solo sexo)."
+
+pct_matricula_mujeres:
+  dimension: "Matrícula"
+  nombre: "Participación de mujeres en la matrícula"
+  descripcion: "Proporción de la matrícula total del programa que corresponde a mujeres."
+  calculo: "total matrícula mujeres / total matrícula. Utils/data_prep.py, líneas 125-127."
+  fuente: "SIES — Matricula_2007_2025_WEB_15_07_2025.csv"
+  unidad: "proporción (0-1)"
+  orientacion: "mayor_es_mejor"
+  estado: "retirada"
+  notas: "Misma razón de retiro que pct_matricula_hombres — reemplazada por paridad_matricula/paridad_matricula_primer_año."
+
+"total matrícula hombres primer año":
+  dimension: "Matrícula"
+  nombre: "Matrícula de hombres en primer año"
+  descripcion: "Cantidad de hombres matriculados en primer año en los programas de la APDA."
+  calculo: "Suma de 'total matrícula hombres' filtrada a primer año (SIES Matrícula), promediada a nivel IES×APDA."
+  fuente: "SIES — Matricula_2007_2025_WEB_15_07_2025.csv"
+  unidad: "N° de estudiantes"
+  orientacion: "mayor_es_mejor"
+  estado: "retirada"
+  notas: "Retirada de dimensions: en favor de paridad_matricula_primer_año, que resume ambos sexos en un solo score de equilibrio."
+
+"total matrícula mujeres primer año_std":
+  dimension: "Matrícula"
+  nombre: "Dispersión de la matrícula de mujeres en primer año"
+  descripcion: "Desviación estándar, entre los distintos programas de una celda IES×APDA, de la matrícula de mujeres de primer año — mide qué tan pareja es la participación femenina entre programas de una misma APDA."
+  calculo: "Desviación estándar intra-celda (columna '_std' generada automáticamente por Utils/data_prep.py::aggregate_ies_apda_rich para toda variable promediada)."
+  fuente: "SIES — Matricula_2007_2025_WEB_15_07_2025.csv"
+  unidad: "desviación estándar (N° de estudiantes)"
+  orientacion: "mayor_es_mejor"
+  estado: "retirada"
+  notas: "Retirada de dimensions: junto con el resto del par de variables por sexo, en favor de paridad_matricula_primer_año."
+
+anid_ies_duracion_mean_adjudicados:
+  dimension: "Investigación ANID (IES)"
+  nombre: "Duración promedio de proyectos ANID (institución, adjudicados 2025)"
+  descripcion: "Duración promedio, en meses, de los proyectos ANID con fallo en 2025, adjudicados a investigadores de la institución (todas las APDAs)."
+  calculo: "Promedio de DURACION_MESES de proyectos ANID con AGNO_FALLO==2025, agrupados por ies_norm. Exploration and data completion/Exp_ANID.py, función _aggregate_view (vista anid_univ_adjudicados), líneas 173-217."
+  fuente: "ANID — BDH_HISTORICA.xlsx"
+  unidad: "meses"
+  orientacion: "mayor_es_mejor"
+  estado: "retirada"
+  notas: "Toda la dimensión 'Investigación ANID (IES)' está comentada en los config.yaml en favor de la versión a nivel APDA (más específica a la disciplina de cada institución). Antes de 2026-08-03 esta variable se llamaba anid_ies_duracion_mean; renombrada al agregar la vista anid_ies_*_activos."
+
+anid_ies_duracion_mean_activos:
+  dimension: "Investigación ANID (IES)"
+  nombre: "Duración promedio de proyectos ANID (institución, activos 2025)"
+  descripcion: "Duración promedio, en meses, de los proyectos ANID activos durante 2025 (incluye proyectos plurianuales adjudicados en años anteriores aún vigentes), adjudicados a investigadores de la institución (todas las APDAs)."
+  calculo: "Promedio de DURACION_MESES de proyectos ANID con AGNO_FALLO <= 2025 <= agno_fin, agrupados por ies_norm, donde agno_fin = AGNO_FALLO + ceil(duración imputada en meses / 12) − 1. La duración se imputa (mediana por PROGRAMA+INSTRUMENTO, o por PROGRAMA si esa combinación no tiene comparables) cuando DURACION_MESES es nula (~4.8% de las filas). Exploration and data completion/Exp_ANID.py, líneas 41-64 (imputación y ventana) y función _aggregate_view (vista anid_univ_activos), líneas 173-217."
+  fuente: "ANID — BDH_HISTORICA.xlsx"
+  unidad: "meses"
+  orientacion: "mayor_es_mejor"
+  estado: "retirada"
+  notas: "Toda la dimensión 'Investigación ANID (IES)' está comentada en los config.yaml. Variable nueva (2026-08-03), documentada para permitir una decisión de ponderación deliberada antes de activarla en el puntaje."
+
+anid_ies_monto_mean_adjudicados:
+  dimension: "Investigación ANID (IES)"
+  nombre: "Monto ANID promedio (institución, todos los fondos, adjudicados 2025)"
+  descripcion: "Monto promedio adjudicado por proyectos ANID con fallo en 2025 de la institución completa, entre todos los tipos de fondo."
+  calculo: "Promedio de MONTO_ADJUDICADO de proyectos ANID con AGNO_FALLO==2025, agrupado por ies_norm. Exploration and data completion/Exp_ANID.py, función _aggregate_view (vista anid_univ_adjudicados), líneas 173-217."
+  fuente: "ANID — BDH_HISTORICA.xlsx"
+  unidad: "CLP"
+  orientacion: "mayor_es_mejor"
+  estado: "retirada"
+  notas: "Ver anid_ies_duracion_mean_adjudicados — dimensión completa comentada en favor de anid_apda_*, renombrada por el mismo motivo."
+
+anid_ies_monto_mean_activos:
+  dimension: "Investigación ANID (IES)"
+  nombre: "Monto ANID promedio (institución, todos los fondos, activos 2025)"
+  descripcion: "Monto promedio adjudicado por proyectos ANID activos durante 2025 de la institución completa, entre todos los tipos de fondo."
+  calculo: "Promedio de MONTO_ADJUDICADO de proyectos ANID con AGNO_FALLO <= 2025 <= agno_fin, agrupado por ies_norm. Ver anid_ies_duracion_mean_activos para el detalle de la ventana e imputación de duración."
+  fuente: "ANID — BDH_HISTORICA.xlsx"
+  unidad: "CLP"
+  orientacion: "mayor_es_mejor"
+  estado: "retirada"
+  notas: "Ver anid_ies_duracion_mean_activos."
+
+anid_ies_n_proyectos_fondecyt_adjudicados:
+  dimension: "Investigación ANID (IES)"
+  nombre: "N° de proyectos FONDECYT (institución, adjudicados 2025)"
+  descripcion: "Cantidad de proyectos ANID FONDECYT con fallo en 2025, adjudicados a investigadores de la institución completa."
+  calculo: "Conteo de proyectos ANID FONDECYT con AGNO_FALLO==2025, agrupados por ies_norm. Exploration and data completion/Exp_ANID.py, función _aggregate_view (vista anid_univ_adjudicados), líneas 173-217."
+  fuente: "ANID — BDH_HISTORICA.xlsx"
+  unidad: "N° de proyectos"
+  orientacion: "mayor_es_mejor"
+  estado: "retirada"
+  notas: "Ver anid_ies_duracion_mean_adjudicados."
+
+anid_ies_n_proyectos_fondecyt_activos:
+  dimension: "Investigación ANID (IES)"
+  nombre: "N° de proyectos FONDECYT (institución, activos 2025)"
+  descripcion: "Cantidad de proyectos ANID FONDECYT activos durante 2025, adjudicados a investigadores de la institución completa."
+  calculo: "Conteo de proyectos ANID FONDECYT con AGNO_FALLO <= 2025 <= agno_fin, agrupados por ies_norm. Ver anid_ies_duracion_mean_activos para el detalle de la ventana e imputación de duración."
+  fuente: "ANID — BDH_HISTORICA.xlsx"
+  unidad: "N° de proyectos"
+  orientacion: "mayor_es_mejor"
+  estado: "retirada"
+  notas: "Ver anid_ies_duracion_mean_activos."
+
+anid_ies_monto_mean_fondecyt_adjudicados:
+  dimension: "Investigación ANID (IES)"
+  nombre: "Monto ANID promedio — FONDECYT (institución, adjudicados 2025)"
+  descripcion: "Monto promedio adjudicado por proyectos ANID FONDECYT con fallo en 2025, de la institución completa."
+  calculo: "Promedio de MONTO_ADJUDICADO restringido a FONDECYT con AGNO_FALLO==2025, agrupado por ies_norm. Exploration and data completion/Exp_ANID.py, función _aggregate_view (vista anid_univ_adjudicados), líneas 173-217."
+  fuente: "ANID — BDH_HISTORICA.xlsx"
+  unidad: "CLP"
+  orientacion: "mayor_es_mejor"
+  estado: "retirada"
+  notas: "Ver anid_ies_duracion_mean_adjudicados."
+
+anid_ies_monto_mean_fondecyt_activos:
+  dimension: "Investigación ANID (IES)"
+  nombre: "Monto ANID promedio — FONDECYT (institución, activos 2025)"
+  descripcion: "Monto promedio adjudicado por proyectos ANID FONDECYT activos durante 2025, de la institución completa."
+  calculo: "Promedio de MONTO_ADJUDICADO restringido a FONDECYT con AGNO_FALLO <= 2025 <= agno_fin, agrupado por ies_norm. Ver anid_ies_duracion_mean_activos para el detalle de la ventana e imputación de duración."
+  fuente: "ANID — BDH_HISTORICA.xlsx"
+  unidad: "CLP"
+  orientacion: "mayor_es_mejor"
+  estado: "retirada"
+  notas: "Ver anid_ies_duracion_mean_activos."
+
+anid_ies_n_proyectos_no_fondecyt_adjudicados:
+  dimension: "Investigación ANID (IES)"
+  nombre: "N° de proyectos ANID no FONDECYT (institución, adjudicados 2025)"
+  descripcion: "Cantidad de proyectos ANID que no son FONDECYT ni 'otros fondos', con fallo en 2025, adjudicados a la institución completa."
+  calculo: "Conteo de proyectos ANID categoría 'no FONDECYT' con AGNO_FALLO==2025, agrupados por ies_norm. Exploration and data completion/Exp_ANID.py, función _aggregate_view (vista anid_univ_adjudicados), líneas 173-217."
+  fuente: "ANID — BDH_HISTORICA.xlsx"
+  unidad: "N° de proyectos"
+  orientacion: "mayor_es_mejor"
+  estado: "retirada"
+  notas: "Ver anid_ies_duracion_mean_adjudicados."
+
+anid_ies_n_proyectos_no_fondecyt_activos:
+  dimension: "Investigación ANID (IES)"
+  nombre: "N° de proyectos ANID no FONDECYT (institución, activos 2025)"
+  descripcion: "Cantidad de proyectos ANID que no son FONDECYT ni 'otros fondos', activos durante 2025, adjudicados a la institución completa."
+  calculo: "Conteo de proyectos ANID categoría 'no FONDECYT' con AGNO_FALLO <= 2025 <= agno_fin, agrupados por ies_norm. Ver anid_ies_duracion_mean_activos para el detalle de la ventana e imputación de duración."
+  fuente: "ANID — BDH_HISTORICA.xlsx"
+  unidad: "N° de proyectos"
+  orientacion: "mayor_es_mejor"
+  estado: "retirada"
+  notas: "Ver anid_ies_duracion_mean_activos."
+
+anid_ies_monto_mean_no_fondecyt_adjudicados:
+  dimension: "Investigación ANID (IES)"
+  nombre: "Monto ANID promedio — no FONDECYT (institución, adjudicados 2025)"
+  descripcion: "Monto promedio adjudicado por proyectos ANID de categoría 'no FONDECYT' con fallo en 2025, de la institución completa."
+  calculo: "Promedio de MONTO_ADJUDICADO restringido a 'no FONDECYT' con AGNO_FALLO==2025, agrupado por ies_norm. Exploration and data completion/Exp_ANID.py, función _aggregate_view (vista anid_univ_adjudicados), líneas 173-217."
+  fuente: "ANID — BDH_HISTORICA.xlsx"
+  unidad: "CLP"
+  orientacion: "mayor_es_mejor"
+  estado: "retirada"
+  notas: "Ver anid_ies_duracion_mean_adjudicados."
+
+anid_ies_monto_mean_no_fondecyt_activos:
+  dimension: "Investigación ANID (IES)"
+  nombre: "Monto ANID promedio — no FONDECYT (institución, activos 2025)"
+  descripcion: "Monto promedio adjudicado por proyectos ANID de categoría 'no FONDECYT' activos durante 2025, de la institución completa."
+  calculo: "Promedio de MONTO_ADJUDICADO restringido a 'no FONDECYT' con AGNO_FALLO <= 2025 <= agno_fin, agrupado por ies_norm. Ver anid_ies_duracion_mean_activos para el detalle de la ventana e imputación de duración."
+  fuente: "ANID — BDH_HISTORICA.xlsx"
+  unidad: "CLP"
+  orientacion: "mayor_es_mejor"
+  estado: "retirada"
+  notas: "Ver anid_ies_duracion_mean_activos."
+
+anid_ies_n_proyectos_otros_fondecyt_adjudicados:
+  dimension: "Investigación ANID (IES)"
+  nombre: "N° de proyectos ANID otros fondos (institución, adjudicados 2025)"
+  descripcion: "Cantidad de proyectos ANID de categorías de fondo distintas a FONDECYT y 'no FONDECYT', con fallo en 2025, adjudicados a la institución completa."
+  calculo: "Conteo de proyectos ANID categoría 'otros fondos' con AGNO_FALLO==2025, agrupados por ies_norm. Exploration and data completion/Exp_ANID.py, función _aggregate_view (vista anid_univ_adjudicados), líneas 173-217."
+  fuente: "ANID — BDH_HISTORICA.xlsx"
+  unidad: "N° de proyectos"
+  orientacion: "mayor_es_mejor"
+  estado: "retirada"
+  notas: "Ver anid_ies_duracion_mean_adjudicados."
+
+anid_ies_n_proyectos_otros_fondecyt_activos:
+  dimension: "Investigación ANID (IES)"
+  nombre: "N° de proyectos ANID otros fondos (institución, activos 2025)"
+  descripcion: "Cantidad de proyectos ANID de categorías de fondo distintas a FONDECYT y 'no FONDECYT', activos durante 2025, adjudicados a la institución completa."
+  calculo: "Conteo de proyectos ANID categoría 'otros fondos' con AGNO_FALLO <= 2025 <= agno_fin, agrupados por ies_norm. Ver anid_ies_duracion_mean_activos para el detalle de la ventana e imputación de duración."
+  fuente: "ANID — BDH_HISTORICA.xlsx"
+  unidad: "N° de proyectos"
+  orientacion: "mayor_es_mejor"
+  estado: "retirada"
+  notas: "Ver anid_ies_duracion_mean_activos."
+
+anid_ies_monto_mean_otros_fondecyt_adjudicados:
+  dimension: "Investigación ANID (IES)"
+  nombre: "Monto ANID promedio — otros fondos (institución, adjudicados 2025)"
+  descripcion: "Monto promedio adjudicado por proyectos ANID de categorías de fondo distintas a FONDECYT y 'no FONDECYT', con fallo en 2025, de la institución completa."
+  calculo: "Promedio de MONTO_ADJUDICADO restringido a 'otros fondos' con AGNO_FALLO==2025, agrupado por ies_norm. Exploration and data completion/Exp_ANID.py, función _aggregate_view (vista anid_univ_adjudicados), líneas 173-217."
+  fuente: "ANID — BDH_HISTORICA.xlsx"
+  unidad: "CLP"
+  orientacion: "mayor_es_mejor"
+  estado: "retirada"
+  notas: "Ver anid_ies_duracion_mean_adjudicados."
+
+anid_ies_monto_mean_otros_fondecyt_activos:
+  dimension: "Investigación ANID (IES)"
+  nombre: "Monto ANID promedio — otros fondos (institución, activos 2025)"
+  descripcion: "Monto promedio adjudicado por proyectos ANID de categorías de fondo distintas a FONDECYT y 'no FONDECYT', activos durante 2025, de la institución completa."
+  calculo: "Promedio de MONTO_ADJUDICADO restringido a 'otros fondos' con AGNO_FALLO <= 2025 <= agno_fin, agrupado por ies_norm. Ver anid_ies_duracion_mean_activos para el detalle de la ventana e imputación de duración."
+  fuente: "ANID — BDH_HISTORICA.xlsx"
+  unidad: "CLP"
+  orientacion: "mayor_es_mejor"
+  estado: "retirada"
+  notas: "Ver anid_ies_duracion_mean_activos."
+
+promedio_de_edad_ponderado_por_jce_promedio_de_edad_mujer:
+  dimension: "JCE"
+  nombre: "Edad promedio ponderada por JCE — mujeres"
+  descripcion: "Edad promedio de las académicas de la institución, ponderada por su jornada completa equivalente (JCE)."
+  calculo: "Promedio de edad de académicas ponderado por JCE, directo desde la hoja PAC de JCE por institución."
+  fuente: "SIES PAC web — PAC_web_2008_2025_SIES_EE.xlsx, hoja BD_Académicos_JCE"
+  unidad: "años"
+  orientacion: "mayor_es_mejor"
+  estado: "retirada"
+  notas: "Comentada en dimensions: JCE de ambos config.yaml — no se usa en el modelo actual."
+
+n_de_jce_de_la_institucion_que_trabajan_en_1_o_mas_instituciones_en_3_o_mas_instituciones:
+  dimension: "JCE"
+  nombre: "Académicos JCE que trabajan en 3+ instituciones"
+  descripcion: "Cantidad de jornadas completas equivalentes (JCE) de académicos de la institución que además trabajan en 3 o más instituciones distintas (alta dispersión de dedicación)."
+  calculo: "Conteo directo desde la hoja PAC de JCE por institución."
+  fuente: "SIES PAC web — PAC_web_2008_2025_SIES_EE.xlsx, hoja BD_Académicos_JCE"
+  unidad: "N° de jornadas (JCE)"
+  orientacion: "mayor_es_mejor"
+  estado: "retirada"
+  notas: "Comentada en dimensions: JCE de ambos config.yaml — no se usa en el modelo actual."
+
+promedio_de_edad_ponderado_por_jce_promedio_de_edad_hombre:
+  dimension: "JCE"
+  nombre: "Edad promedio ponderada por JCE — hombres"
+  descripcion: "Edad promedio de los académicos hombres de la institución, ponderada por su jornada completa equivalente (JCE)."
+  calculo: "Promedio de edad de académicos hombres ponderado por JCE, directo desde la hoja PAC de JCE por institución."
+  fuente: "SIES PAC web — PAC_web_2008_2025_SIES_EE.xlsx, hoja BD_Académicos_JCE"
+  unidad: "años"
+  orientacion: "mayor_es_mejor"
+  estado: "retirada"
+  notas: "Comentada en dimensions: JCE de ambos config.yaml — no se usa en el modelo actual."
+
+n_de_jce_por_institucion_total_hombres:
+  dimension: "JCE"
+  nombre: "Dotación JCE — hombres"
+  descripcion: "Total de jornadas completas equivalentes (JCE) de académicos hombres de la institución."
+  calculo: "Conteo directo desde la hoja PAC de JCE por institución."
+  fuente: "SIES PAC web — PAC_web_2008_2025_SIES_EE.xlsx, hoja BD_Académicos_JCE"
+  unidad: "N° de jornadas (JCE)"
+  orientacion: "mayor_es_mejor"
+  estado: "retirada"
+  notas: "Retirada de dimensions: JCE en favor de paridad_jce, que resume ambos sexos en un solo score de equilibrio. Sigue usándose como insumo intermedio para calcular paridad_jce (Utils/data_prep.py::add_parity_scores)."
+
+n_de_jce_por_institucion_total_mujeres:
+  dimension: "JCE"
+  nombre: "Dotación JCE — mujeres"
+  descripcion: "Total de jornadas completas equivalentes (JCE) de académicas mujeres de la institución."
+  calculo: "Conteo directo desde la hoja PAC de JCE por institución."
+  fuente: "SIES PAC web — PAC_web_2008_2025_SIES_EE.xlsx, hoja BD_Académicos_JCE"
+  unidad: "N° de jornadas (JCE)"
+  orientacion: "mayor_es_mejor"
+  estado: "retirada"
+  notas: "Misma razón de retiro que n_de_jce_por_institucion_total_hombres — sigue usándose como insumo intermedio de paridad_jce."
+
+"año inicio":
+  dimension: "Trayectoria"
+  nombre: "Año de inicio del programa"
+  descripcion: "Año calendario en que el programa comenzó a impartirse."
+  calculo: "Columna directa de la oferta académica del programa."
+  fuente: "SIES Oferta Académica — Oferta_Academica_2010_al_2025_SIES_02_06_2025_WEB_E.csv"
+  unidad: "año calendario"
+  orientacion: "menor_es_mejor"
+  estado: "retirada"
+  notas: "direction: -1 (comentada) — un programa más antiguo/consolidado puntuaba mejor. Comentada en dimensions:/direction: de ambos config.yaml."
+
+brecha_duracion:
+  dimension: "Trayectoria"
+  nombre: "Brecha de duración (teórica vs. total)"
+  descripcion: "Diferencia entre la duración total declarada del programa y la duración de su fase lectiva (duración de estudios). Siempre ≥ 0, por lo que no distingue programas que titulan antes de lo previsto."
+  calculo: "duración total − duración estudios. Utils/data_prep.py, líneas 141-143."
+  fuente: "SIES Oferta Académica — Oferta_Academica_2010_al_2025_SIES_02_06_2025_WEB_E.csv"
+  unidad: "semestres"
+  orientacion: "menor_es_mejor"
+  estado: "retirada"
+  notas: "Retirada (julio 2026) en favor de sobreduracion_meses, que usa duración empírica de titulados en vez de la duración nominal declarada. Ver docs/2026-07-22_pac_academicos39_jce_weighting_acreditacion.md, Parte D. Sigue calculándose en data_prep.py aunque no se usa en dimensions:."
+
+duracion_titulados_mean:
+  dimension: "Trayectoria"
+  nombre: "Duración real de titulación (promedio)"
+  descripcion: "Duración promedio observada, en años, entre el ingreso y la obtención del título para los titulados del programa (duración empírica, no la nominal declarada en la oferta)."
+  calculo: "Promedio de duration_years (fecha de obtención de título − fecha de ingreso) por código único de programa, sobre titulados sin cambios de carrera/readmisión. Exploration and data completion/Exp_Titulados.py, líneas 90-100."
+  fuente: "MINEDUC — 20250718_Titulados_Ed_Superior_2024_WEB.csv"
+  unidad: "años"
+  orientacion: "menor_es_mejor"
+  estado: "retirada"
+  notas: "Comentada en dimensions:/direction: en favor de sobreduracion_meses (que combina esta variable con la duración nominal en un solo indicador de exceso)."
+
+duracion_titulados_median:
+  dimension: "Trayectoria"
+  nombre: "Duración real de titulación (mediana)"
+  descripcion: "Igual que 'Duración real de titulación (promedio)' pero usando la mediana en vez del promedio, menos sensible a valores extremos."
+  calculo: "Mediana de duration_years por código único de programa. Exploration and data completion/Exp_Titulados.py, líneas 90-100."
+  fuente: "MINEDUC — 20250718_Titulados_Ed_Superior_2024_WEB.csv"
+  unidad: "años"
+  orientacion: "menor_es_mejor"
+  estado: "retirada"
+  notas: "Comentada junto con duracion_titulados_mean."
+
+sobreduracion_semestres:
+  dimension: "Trayectoria"
+  nombre: "Sobreduración de titulación (semestres)"
+  descripcion: "Igual que sobreduracion_meses pero expresada en semestres en vez de meses."
+  calculo: "duracion_titulados_mean en años × 2 − duración total en semestres, con las mismas exclusiones de nivel de carrera. Utils/data_prep.py, líneas 145-161."
+  fuente: "MINEDUC Titulados (duración empírica) + SIES Oferta Académica (duración nominal)"
+  unidad: "semestres"
+  orientacion: "menor_es_mejor"
+  estado: "retirada"
+  notas: "Se calcula siempre junto a sobreduracion_meses; se dejó sobreduracion_meses como la versión activa en dimensions: por ser más intuitiva. direction: -1 (comentada)."

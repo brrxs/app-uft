@@ -1,0 +1,14 @@
+# Raw source data (large, not ours to redistribute) and generated outputs —
+# regenerate with Data processing/ + Dashboard/ (see their READMEs).
+datos/
+Data processing/Data/*.csv
+Data processing/Data/catalogos/
+Data processing/dfs/
+**/outputs/
+**/data/*.csv
+Dashboard/BI testing/*.html
+Dashboard/BI testing/plotly.min.js
+Dashboard/site/assets/
+Dashboard/site/_fragments/
+__pycache__/
+*.pyc
